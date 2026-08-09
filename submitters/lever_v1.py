@@ -29,7 +29,6 @@ from core.form_planning import AnswerPolicyContext, AnswerPolicyV1
 from core.submission_domain import (
     AlreadyAppliedOutcome,
     AnswerDecisionV1,
-    AnswerDisposition,
     CommitOutcome,
     ConfirmedSubmittedOutcome,
     FailedBeforeCommitOutcome,
@@ -1030,14 +1029,24 @@ class LeverBrowserV1:
                 field.field_id for field in fields
             }:
                 raise LeverAdapterBlockedError(ReasonCode.REQUIRED_FIELD_UNKNOWN)
+            # Trust policy.blockers alone -- plan_fields already blocks
+            # exactly the REQUIRED_FIELD_UNKNOWN cases that matter
+            # (`if decision.disposition != RESOLVED and field.required`).
+            # This used to also block on `any(decision.disposition is not
+            # RESOLVED for decision in policy.decisions)`, treating every
+            # optional, non-sensitive field that legitimately has no
+            # available answer (a generic custom question like "Current
+            # company" with no matching canonical concept) exactly the same
+            # as a genuinely missing required answer. On the one real
+            # fixture, that made ready_for_permit structurally unreachable
+            # for any real Lever posting with even one such field -- see the
+            # P1 plan doc. greenhouse_v1.py and workday_v2.py both already
+            # trust policy.blockers alone at this exact point; this brings
+            # Lever in line with that already-proven pattern rather than
+            # inventing a new one.
             blockers = list(dict.fromkeys(policy.blockers))
             if not attachment_verified:
                 blockers.append(ReasonCode.ATTACHMENT_UNVERIFIED)
-            if any(
-                decision.disposition is not AnswerDisposition.RESOLVED
-                for decision in policy.decisions
-            ):
-                blockers.append(ReasonCode.REQUIRED_FIELD_UNKNOWN)
             blockers = list(dict.fromkeys(blockers))
             now = self._clock()
             if now.tzinfo is None or now.utcoffset() is None:
@@ -1147,6 +1156,14 @@ class LeverBrowserV1:
                 identity=identity,
                 fields=fields,
             )
+            # plan.decisions is the frozen, inspect-time-computed set --
+            # ready_for_permit (already required to reach this point) already
+            # guarantees every REQUIRED field resolved then, via
+            # plan.blockers. Re-requiring every decision (including
+            # legitimately-abstained optional ones) to be RESOLVED here is
+            # the same over-broad check removed from inspect() above, for
+            # the same reason -- see that comment and the P1 plan doc.
+            # fields != plan.fields already catches real structural drift.
             if (
                 fields != plan.fields
                 or lever_v1_form_fingerprint(
@@ -1156,10 +1173,6 @@ class LeverBrowserV1:
                 )
                 != plan.form_fingerprint
                 or len(plan.decisions) != len(fields)
-                or any(
-                    decision.disposition is not AnswerDisposition.RESOLVED
-                    for decision in plan.decisions
-                )
             ):
                 return NeedsReviewOutcome(reason_code=ReasonCode.FORM_CHANGED)
             proof = await session.ensure_resume_attachment(

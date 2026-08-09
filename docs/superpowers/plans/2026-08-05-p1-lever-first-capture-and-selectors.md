@@ -525,6 +525,111 @@ Follow-up items 1 and 2 from the prior pass, done in one sweep the same day:
   understood, not fixed here). `ruff check .`/`ruff format --check .` clean
   on every touched file.
 
+### Task 2c: the "operator-reviewed-blank" blocker turned out not to need a redesign (2026-08-09, same day)
+
+**Correction to follow-up item 5 as it stood a few hours earlier the same
+day**: that entry said resolving `org`/`urls_Twitter_`/`urls_Other_`'s
+permanent abstention needed a new domain-model concept — "an operator
+reviewed this exact field and confirmed leaving it blank" — in shared
+`core/submission_domain.py`/`core/form_planning.py` code used by all five
+adapters. Pushed to look harder rather than accept that conclusion, and it
+was wrong, for a fixable reason: it was reached by treating every
+non-`RESOLVED` decision as one undifferentiated "not answered" bucket, when
+the domain model already distinguishes two: `AnswerDisposition.ABSTAINED`
+(no answer available, and `_abstain()` only assigns this when the field is
+*neither* `required` *nor* sensitive) versus `AnswerDisposition.OPERATOR_REQUIRED`
+(assigned when it's required or sensitive — an existing, already-tested
+mechanism `greenhouse_v1.py`/`workday_v2.py` already rely on).
+`AnswerPolicyV1.plan_fields`'s own blocker computation already only escalates
+`REQUIRED_FIELD_UNKNOWN` for `field.required` fields — `policy.blockers` was
+correct and empty the whole time (confirmed directly, `blockers: ()`, in the
+diagnostic script from the earlier pass). The actual bug was narrower and
+entirely inside `submitters/lever_v1.py`: `LeverBrowserV1.inspect()` and
+`preflight()` each additionally blocked on `any(decision.disposition is not
+RESOLVED for decision in policy.decisions)`, collapsing the harmless
+`ABSTAINED` case into the same bucket as a genuine missing required answer.
+`greenhouse_v1.py`/`workday_v2.py` were already checked earlier this session
+and confirmed to trust `policy.blockers` alone at the equivalent point — a
+second read of `greenhouse_v1.py:1698-1738` (this pass) confirmed the exact
+matching pattern in more detail (filter to `RESOLVED` decisions, check only
+that `required_ids.issubset(...)`, no blanket check). Removed the extra
+check from both places, matching that already-proven pattern instead of
+inventing a new one. `AnswerDisposition` import dropped from `lever_v1.py`
+(both usages were the removed checks).
+
+Verified, not assumed: `test_inspection_builds_auditable_ready_plan_and_never_clicks`
+(renamed back from `..._plan_and_never_clicks` now that `ready_for_permit`
+is genuinely `True` again) confirms `ready_for_permit is True` and
+`blockers == ()` against the real fixture and the same sparse fake profile
+used throughout this file — no test data changes, only the adapter fix. The
+`_assume_ready` test helper (four other browser tests) is gone entirely,
+not just unused — those tests now exercise the real, unmodified `inspect()`
+→ `preflight()` flow, which is more honest than a synthetic placeholder-
+decision workaround. Full Lever-adjacent suite re-run after: still 98
+passed, 0 failed.
+
+`application_consent.html`'s detection-mechanism gap is **not** resolved by
+this correction — that one is real, independent, and still needs the same
+label-text-matching redesign described in Task 2b; this section only
+retracts the specific "needs a new domain-model concept" claim for the
+`org`/`urls_Twitter_`/`urls_Other_` case.
+
+### Task 2d: the real remaining blocker for Task 3 — `lever_playwright.py` was never rewritten (2026-08-09, found investigating the fix above)
+
+**This is now the single most significant open finding in this document.**
+Every fix this session — v2→v5, the fixture backlog, the `ready_for_permit`
+correction above — touched only `submitters/lever_v1.py` (pure HTML parsing
+and business logic, exercised by `_FakeSession`-backed tests) and
+`submitters/platforms.py`. `submitters/lever_playwright.py` — the actual
+Playwright browser driver `LeverBrowserV1` would use in a real dry-run or
+live canary — duplicates several of the same markup assumptions v2 already
+disproved, and none of those duplicates were ever updated:
+
+- `_SYSTEM_CONTROL_NAMES = frozenset({"authenticity_token", "csrf_token",
+  "_csrf", "utf8"})` (line 65) — the exact fabricated Rails-convention list
+  replaced in `lever_v1.py` with the real observed hidden fields, still
+  present here verbatim, unfixed.
+- `fill()` (line 1102) locates each field with
+  `[data-qa="application-field"][data-field-id="{field.field_id}"]` (line
+  1126) — real markup has neither attribute; this would find zero elements
+  and raise `FORM_CHANGED` on the very first field of any real page.
+- `_FORM_PROOF_SCRIPT` (lines 300-759, ~460 lines) — a large embedded
+  JavaScript re-verification script, evaluated directly in the browser page
+  immediately before the irreversible click, that re-implements a big slice
+  of `lever_v1.py`'s field-observation and actionability-capture logic
+  independently, in JS, for atomicity against the click. It has its own
+  parallel copies of the form selector (`'form[data-qa="application-form"]
+  [data-posting-id][data-site]'`, lines 408/430), the submit-button selector
+  (`'button[data-qa="btn-submit"][type="submit"]'`, lines 418/437 — doubly
+  wrong, since real markup's visible submit button is `type="button"`, not
+  `type="submit"`, confirmed this session), the field-wrapper selector
+  (`'[data-qa="application-field"][data-field-id]'`, line 477), and a
+  `data-field-id`-reading field-id lookup (line 522) — none matching real
+  markup. `_file_observation` (line 992/998) and `ensure_resume_attachment`
+  (line 1024/1039, keyed on a `data-canonical-name="resume"` wrapper
+  attribute that doesn't exist) carry the same pattern.
+- Net effect: even with every other fix in this document, `preflight()`
+  calling into a real `PlaywrightLeverCandidateSession` against a real page
+  would fail immediately — not on some edge case, on the very first
+  structural check. Task 3 (fixture-qualify → real-Chromium rehearsal →
+  real-URL dry run → live canary) is unreachable until this file is rebuilt
+  from the same real evidence `lever_v1.py` already was.
+
+**Deliberately not attempted in this pass.** This is qualitatively
+different from every other fix today: `lever_v1.py`'s rewrite could be
+verified against real captured HTML with plain pytest; this file's
+correctness can only be verified by actually running it against a real
+Playwright page (`test_lever_playwright_safety.py`'s existing tests cover
+network-guard and multipart-commitment *properties*, not the markup
+selectors themselves, and don't exercise a real DOM at all). Rewriting
+~500 lines of markup-dependent Playwright/JS code — including a
+security-critical, embedded re-verification script that runs immediately
+before an irreversible click — without the ability to verify it against a
+real browser is exactly the "confident but unverified" work this whole
+project rebuild exists to prevent. Needs its own dedicated pass, ideally
+informed by an actual Chromium rehearsal (Task 3's own second step) rather
+than done blind and then discovered wrong at that step anyway.
+
 ### Follow-up (not done in this pass, scoped so the next session can pick it up)
 
 1. ~~Migrate or retire the 24-fixture backlog~~ — done 2026-08-09, see
@@ -536,16 +641,18 @@ Follow-up items 1 and 2 from the prior pass, done in one sweep the same day:
 4. Investigate `LEVER_CONFIRMATION_SELECTOR` — ask the operator what the real
    post-submit page showed (screenshot or plain description), since the
    capture tool itself found no match. Still open, still needs the operator.
-5. **The real top priority for Task 3, unchanged by today's fixture work**:
-   design and implement a way to represent "an operator reviewed this exact
-   field and confirmed leaving it blank" in
-   `core/submission_domain.py`/`core/form_planning.py` — see the detailed
-   finding above (Task 2, the `org`/`urls_Twitter_`/`urls_Other_` trace).
-   Everything else in this follow-up list is independent of Task 3
-   readiness; this one isn't. `application_consent.html`'s detection-
-   mechanism gap (Task 2b above) is a second, related design item that
-   likely wants the same sitting-down session — both touch
-   `core/form_planning.py`'s answer policy.
+5. ~~Design "operator reviewed and confirmed leaving blank" in shared
+   domain code~~ — retracted, see Task 2c: the real bug was narrower and
+   Lever-local, and is fixed. `application_consent.html`'s detection-
+   mechanism gap (Task 2b) is still open and still needs real
+   label-text-matching work in `core/form_planning.py`'s answer policy —
+   that part of the old item 5 stands.
+5b. **The real top priority for Task 3 now**: rebuild
+   `submitters/lever_playwright.py` from the same real evidence
+   `lever_v1.py` was rewritten from — see Task 2d above for the full list
+   of stale locations. Needs a real-Chromium rehearsal to verify, not just
+   unit tests; likely the right way to sequence this is to treat it as part
+   of Task 3's own second step rather than a separate pre-step.
 6. Re-earn `scripts/evaluate_v4_local_model_qualification.py`'s committed
    report (`test_v4_local_model_qualification.py::test_committed_local_model_report_is_aggregate_only`
    fails on source-integrity, not logic — see above): unrelated to Lever, a
@@ -558,31 +665,19 @@ Follow-up items 1 and 2 from the prior pass, done in one sweep the same day:
 
 Unchanged from the design spec's existing ladder (§2 qualification stages) —
 not rewritten here because nothing learned this session changes the ladder
-itself, only what has to happen before Task 3 can start. The hCaptcha
-false-positive that previously blocked `assess_lever_v1_snapshot` from ever
-reaching `FORM` state on a real page is fixed, and so is field-level
-resolution for every identity-shaped field a profile actually has data for
-(see Task 2 above) — but follow-up item 5 (no way to explicitly resolve a
-generic optional field with no canonical concept) is now the real,
-structural blocker for reaching `ready_for_permit` on a real page, not the
-unmigrated-fixture or stale-qualification-report items:
+itself, only what has to happen before Task 3 can start. As of 2026-08-09:
+the hCaptcha false-positive, the fixture backlog, and the `ready_for_permit`
+over-blocking bug are all fixed (Tasks 2, 2b, 2c above) — `lever_v1.py`'s
+offline logic now honestly reaches a ready plan on the real fixture. The
+real, structural blocker is Task 2d: `submitters/lever_playwright.py`, the
+actual browser driver, was never rewritten from v2 assumptions and would
+fail immediately against a real page regardless of how ready the plan is.
 
-- [ ] Offline fixture suite passes against the rewritten contract.
+- [x] Offline fixture suite passes against the rewritten contract.
+- [ ] `submitters/lever_playwright.py` rebuilt from real evidence (Task 2d).
 - [ ] Real-Chromium rehearsal with `HTMLFormElement.prototype.submit` stubbed —
-  confirms no request leaves before spending a real application on it.
-- [ ] One real-URL dry run (`DRY_RUN=true`) against a **different** real Lever
-  posting than the one captured, to catch overfitting to a single tenant's
-  markup.
-- [ ] One live canary — operator selects and approves the exact job,
-  handles CAPTCHA/MFA manually, confirms via the employer's own confirmation
-  email. This is the step that actually produces the P1 exit criterion.
-
-Unchanged from the design spec's existing ladder (§2 qualification stages) —
-not rewritten here because nothing learned this session changes it:
-
-- [ ] Offline fixture suite passes against the rewritten contract.
-- [ ] Real-Chromium rehearsal with `HTMLFormElement.prototype.submit` stubbed —
-  confirms no request leaves before spending a real application on it.
+  confirms no request leaves before spending a real application on it. Also
+  the natural point to verify Task 2d's rewrite against a real page.
 - [ ] One real-URL dry run (`DRY_RUN=true`) against a **different** real Lever
   posting than the one captured, to catch overfitting to a single tenant's
   markup.

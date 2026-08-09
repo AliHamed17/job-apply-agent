@@ -11,7 +11,6 @@ import pytest
 from bs4 import BeautifulSoup
 
 from core.submission_domain import (
-    AnswerDecisionV1,
     AnswerDisposition,
     AnswerProvenance,
     ConfirmedSubmittedOutcome,
@@ -249,46 +248,6 @@ def _permit(plan) -> FinalSubmitPermit:
     )
 
 
-def _assume_ready(plan):
-    """Replace every non-resolved decision with a synthetic resolved one and
-    clear plan.blockers, so ready_for_permit is True and preflight's own
-    independent re-check (lever_v1.py: `any(decision.disposition is not
-    RESOLVED for decision in plan.decisions)`) doesn't short-circuit before
-    reaching the actual mechanics these tests exercise.
-
-    application_basic.html's real 3 non-identity-shaped fields (org/"Current
-    company", urls_Twitter_, urls_Other_) have no canonical concept in
-    core.submission_domain._CANONICAL_LABEL_ALIASES at all, so nothing in
-    AnswerPolicyV1 -- not identity resolution, not operator-approved answers,
-    not even a configured LLM -- can ever resolve them for real; see
-    test_inspection_builds_auditable_plan_and_never_clicks and the P1 plan
-    doc for the full trace. Worse: AnswerDecisionV1's own validator forbids a
-    RESOLVED decision from carrying a blank value, so there is no way to
-    honestly encode "reviewed and left blank" either -- that concept doesn't
-    exist in the domain model yet. Both gaps are real and, as of this
-    session, unresolved -- but they are orthogonal to what preflight/
-    commit-phase tests below actually exercise (attachment binding,
-    confirmation-injection resistance, click-timeout handling, proof
-    validation): those checks run *after* every field already has a
-    resolved answer, and don't care what the answers are. The placeholder
-    value below is exactly that -- a schema-valid stand-in for "assume an
-    operator already reviewed and answered this through some future
-    mechanism" -- not a claim this is what the real field's answer would be.
-    """
-    resolved = tuple(
-        decision
-        if decision.disposition is AnswerDisposition.RESOLVED
-        else AnswerDecisionV1(
-            field_id=decision.field_id,
-            disposition=AnswerDisposition.RESOLVED,
-            provenance=AnswerProvenance.OPERATOR_APPROVED_REUSABLE,
-            value="synthetic-test-placeholder",
-        )
-        for decision in plan.decisions
-    )
-    return plan.model_copy(update={"blockers": (), "decisions": resolved})
-
-
 def _context(resume_path: str, cv_hash: str) -> AdapterPreflightContext:
     return AdapterPreflightContext(
         normalized_job_url=normalize_url(JOB_URL),
@@ -309,29 +268,24 @@ def _live_descriptor(fingerprint: str):
 
 
 @pytest.mark.asyncio
-async def test_inspection_builds_auditable_plan_and_never_clicks(tmp_path) -> None:
+async def test_inspection_builds_auditable_ready_plan_and_never_clicks(tmp_path) -> None:
     """application_basic.html is the real, 11-field Collate form (see the P1
     plan doc), not the old 3-field candidate-*/FIXTURE_QUALIFIED-era fixture
-    this test used to assert against -- ready_for_permit is correctly False
-    here, not a regression: 3 of the 11 real fields (org/"Current company",
-    urls_Twitter_, urls_Other_) have no canonical concept in
-    core.submission_domain._CANONICAL_LABEL_ALIASES at all (not "unmapped
-    yet", genuinely no concept -- "current employer"/"twitter" aren't
-    identity facts this policy models), so they can never resolve through
-    any existing deterministic path (identity, operator-approved, CV
-    evidence, or even a configured LLM -- _allowed_llm_evidence_keys also
-    requires a recognized canonical/semantic key). That is Lever's fill()
-    correctly refusing to guess at fields nobody has ever told it how to
-    answer, not a bug -- see the P1 plan doc for the full trace and why this
-    is now the real, top blocker for Task 3, independent of everything else
-    fixed this session. What IS proven here: 8 of 11 fields are correctly
-    auditable, and the 3 identity-shaped ones with data in the fake profile
-    (resume, name, email) resolve with real, inspectable provenance -- this
-    fixture had no resolvable phone/location/social-link values in the fake
-    profile either, so those three abstain for a completely mundane reason
-    (sparse test data), not a mapping gap; see
+    this test used to assert against. ready_for_permit is True here because
+    LeverBrowserV1.inspect() now trusts policy.blockers alone (matching
+    greenhouse_v1.py/workday_v2.py's already-proven pattern) instead of also
+    blocking on any() non-RESOLVED decision -- plan_fields's own blocker
+    computation already only blocks a field that's both unresolved AND
+    required, so an optional field abstaining for a mundane reason (no
+    canonical concept for "Current company"/Twitter, or simply no data in
+    this fake profile for phone/location/social links) correctly does not
+    block readiness. Only 3 of 11 fields resolve here because the fake
+    profile only has name/email data and a verified attachment -- see
     test_basic_form_observer_is_ordered_bounded_and_attachment_explicit for
-    proof each of those *would* resolve given real values."""
+    proof phone/location/linkedin/github/portfolio would also resolve given
+    real profile values; org/urls_Twitter_/urls_Other_ never resolve
+    regardless of profile completeness (no matching canonical concept
+    exists), which is fine precisely because they're optional."""
     session = _FakeSession()
     plan, _resume_path, cv_hash = await _inspect(tmp_path, session)
     adapter = LeverBrowserV1(browser_factory=_Factory())
@@ -365,8 +319,8 @@ async def test_inspection_builds_auditable_plan_and_never_clicks(tmp_path) -> No
         "name": AnswerProvenance.DETERMINISTIC_IDENTITY,
         "email": AnswerProvenance.DETERMINISTIC_IDENTITY,
     }
-    assert plan.ready_for_permit is False
-    assert plan.blockers == (ReasonCode.REQUIRED_FIELD_UNKNOWN,)
+    assert plan.ready_for_permit is True
+    assert plan.blockers == ()
     assert session.click_calls == 0
     assert session.close_calls == 1
 
@@ -425,7 +379,6 @@ async def test_live_shaped_preflight_binds_payload_attachment_and_visible_eviden
     tmp_path,
 ) -> None:
     plan, resume_path, cv_hash = await _inspect(tmp_path, _FakeSession())
-    plan = _assume_ready(plan)
     session = _FakeSession()
     adapter = LeverBrowserV1(
         browser_factory=_Factory(session),
@@ -459,7 +412,6 @@ async def test_confirmation_injected_before_action_never_becomes_success(
     tmp_path,
 ) -> None:
     plan, resume_path, cv_hash = await _inspect(tmp_path, _FakeSession())
-    plan = _assume_ready(plan)
     session = _FakeSession(inject_before_action="verified_confirmation.html")
     adapter = LeverBrowserV1(
         browser_factory=_Factory(session),
@@ -494,7 +446,6 @@ async def test_generic_hidden_or_wrong_posting_confirmation_is_unknown(
     post_click: str,
 ) -> None:
     plan, resume_path, cv_hash = await _inspect(tmp_path, _FakeSession())
-    plan = _assume_ready(plan)
     session = _FakeSession(post_click=post_click)
     adapter = LeverBrowserV1(
         browser_factory=_Factory(session),
@@ -520,7 +471,6 @@ async def test_generic_hidden_or_wrong_posting_confirmation_is_unknown(
 @pytest.mark.asyncio
 async def test_post_click_timeout_is_unknown_and_never_retried(tmp_path) -> None:
     plan, resume_path, cv_hash = await _inspect(tmp_path, _FakeSession())
-    plan = _assume_ready(plan)
     session = _FakeSession(click_error=True)
     adapter = LeverBrowserV1(
         browser_factory=_Factory(session),
@@ -549,7 +499,6 @@ async def test_post_click_timeout_is_unknown_and_never_retried(tmp_path) -> None
 @pytest.mark.asyncio
 async def test_invalid_redacted_payload_proof_blocks_before_final_action(tmp_path) -> None:
     plan, resume_path, cv_hash = await _inspect(tmp_path, _FakeSession())
-    plan = _assume_ready(plan)
     session = _FakeSession(proof_valid=False)
     adapter = LeverBrowserV1(
         browser_factory=_Factory(session),
