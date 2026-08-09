@@ -640,7 +640,16 @@ than done blind and then discovered wrong at that step anyway.
    2026-08-06, see the checked item above.
 4. Investigate `LEVER_CONFIRMATION_SELECTOR` — ask the operator what the real
    post-submit page showed (screenshot or plain description), since the
-   capture tool itself found no match. Still open, still needs the operator.
+   capture tool itself found no match. Still open, still needs the operator
+   — `capture.json` only stores network-request metadata per phase
+   (`content_type`/`method`/`phase`/`resource_type`/`url`), not DOM/HTML
+   snapshots, so there's nothing further to extract from the existing
+   capture. One thing checked this pass that *is* useful, though:
+   `confirmation_url_path` in the committed `capture.json` equals the exact
+   apply URL, not a distinct URL — Lever's real confirmation state is not a
+   navigation/redirect, it's an in-place DOM update on the same page. Rules
+   out any URL-based detection approach; confirmation detection has to stay
+   DOM-content-based, which is already the current design.
 5. ~~Design "operator reviewed and confirmed leaving blank" in shared
    domain code~~ — retracted, see Task 2c: the real bug was narrower and
    Lever-local, and is fixed. `application_consent.html`'s detection-
