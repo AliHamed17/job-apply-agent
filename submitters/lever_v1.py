@@ -811,6 +811,8 @@ def lever_v1_final_action_binding(
                 raise LeverAdapterBlockedError(ReasonCode.FORM_CHANGED)
             seen_system.add(name)
             continue
+        if wrapper is None:
+            raise LeverAdapterBlockedError(ReasonCode.FORM_CHANGED)
         if not _visible(wrapper):
             raise LeverAdapterBlockedError(ReasonCode.FORM_CHANGED)
         field_id = wrapper_field_id[wrapper_key]
