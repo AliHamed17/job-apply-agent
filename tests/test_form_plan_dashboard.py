@@ -42,6 +42,13 @@ def test_confirmation_preserves_api_detail_and_refreshes_only_stale_plans() -> N
     assert "The form changed while you were reviewing it" not in confirmation_flow
 
 
+def test_dashboard_supports_audited_optional_blank_confirmation() -> None:
+    assert "fieldAllowsOperatorBlank(field, partialPlan)" in APP_JS
+    assert "Confirm this optional field should remain blank" in APP_JS
+    assert "confirm_blank: confirmBlank" in APP_JS
+    assert "operator_confirmed_blank" in APP_JS
+
+
 def test_partial_plan_requires_scoped_reuse_then_reinspection() -> None:
     control = APP_JS.split(
         "function formAnswerControl(field, decision, index, reviewable, partialPlan)",

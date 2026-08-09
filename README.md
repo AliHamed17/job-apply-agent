@@ -229,7 +229,7 @@ prepare-only placeholder-auth bypass.
 | POST | `/api/applications/{id}/qualification/dry-run` | Guarded explicit real-URL inspection; final action disabled |
 | POST | `/api/applications/{id}/qualification/canary` | One-use exact canary request after dry-run review |
 | GET | `/api/applications/{id}/form-plan` | Read latest plan and blockers |
-| POST | `/api/applications/{id}/answers/{field_id}/confirm` | Confirm one exact answer |
+| POST | `/api/applications/{id}/answers/{field_id}/confirm` | Confirm one exact answer or explicitly review a safe optional field as blank (`confirm_blank=true`) |
 | POST | `/api/applications/{id}/submit` | Request exact explicit send; normally disabled now |
 | GET | `/api/submission-attempts/{id}` | Poll the authoritative attempt |
 | POST | `/api/submission-attempts/{id}/reconcile` | Reconcile an unknown attempt |
