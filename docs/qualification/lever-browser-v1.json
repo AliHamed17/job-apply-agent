@@ -3,7 +3,7 @@
     "adapter_name": "lever",
     "adapter_version": "1.0.0",
     "execution_contract_version": "two-phase-v2",
-    "selector_version": "lever-candidate-v2",
+    "selector_version": "lever-candidate-v5",
     "transport": "browser"
   },
   "achieved_tier": "fixture_qualified",
@@ -19,25 +19,25 @@
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "application_basic.html",
-        "sha256": "e911bde7a70e1e07e80806d2c13608538790f48b5f04ba9ae167e615c5a463dc"
+        "sha256": "c41462f224e38e610a38343916e8ec118bfe2a36ebb155b8eab3ac985540e60f"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "application_consent.html",
-        "sha256": "ae2e26036587e5e64a9de917f1f54f5ff887a28fa318ce689bc5a22097ef49a0"
+        "sha256": "63cb2eac9ff0b487b520b623c473b20de36ae663c5f7ed1f3938c7410ae20cdb"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "application_custom_select.html",
-        "sha256": "f555fb0c90b0587e0c332bfbaace0cb262c78624559b4d2f4b163cc7a1306730"
+        "sha256": "32e636eb71562083faa6a685484d4af7895075e248d7598af7292843192cb3a3"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "application_radio_checkbox.html",
-        "sha256": "51a3934d849d55a538af860563423745974de0d7eaaefe4f3b27af5695ce84f5"
+        "sha256": "e276f955fb02408b172adf260a0c5ecdf8aed33ce86e4a3e5c373263693f1361"
       },
       {
         "expected_reason_code": "CHALLENGE_DETECTED",
@@ -55,13 +55,13 @@
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "disabled_submit.html",
-        "sha256": "147c4b316352878679712eb308d579407865faa5647a492347ab42667d43f956"
+        "sha256": "17a6b1e138e10577bab71e52af4d34a3c1fd067769a49cce7ff9e33338e72b3e"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "duplicate_field.html",
-        "sha256": "6b98023a1a193e87d02f34767d84609bd2397dc2d2e902f30c6435090373df72"
+        "sha256": "92842b6eaaf97d3b300aa86e054834c68b0e757dee3df855ad3766289f2e2018"
       },
       {
         "expected_reason_code": "SELECTOR_DRIFT",
@@ -74,12 +74,6 @@
         "expected_state": "selector_drift",
         "file": "hidden_confirmation.html",
         "sha256": "a96ab33222d866712e7e6ef9195df11eed6930876a163cabacfdde524112a24e"
-      },
-      {
-        "expected_reason_code": null,
-        "expected_state": "form",
-        "file": "invalid_action.html",
-        "sha256": "a4f3bb16cc660e0b3205f94d7f7fd18d3bf1da89e0d0f650bfe4249525b19a6f"
       },
       {
         "expected_reason_code": null,
@@ -103,49 +97,49 @@
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "multiple_resume.html",
-        "sha256": "3b834e89e32d358e257ee1cedf7190bbe3108192fade93f40e1150631e1d43cd"
+        "sha256": "a3c56daed8019c5641b767fd96356a0735163d7837f237932510a897b770eef4"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "outer_aria_disabled.html",
-        "sha256": "834ae2706d9fd644cd227426054eadbad5b56ebf70f49d815147786b6033c311"
+        "sha256": "44a1067c914200ef624017b29489137e93aec50423333dc451784079c685d94b"
       },
       {
         "expected_reason_code": "SELECTOR_DRIFT",
         "expected_state": "selector_drift",
         "file": "outer_content_visibility.html",
-        "sha256": "7a86bc7a98fee5f9f36317f48d11ec4308dd3511cf533dbfe35ad2e9d0cb5193"
+        "sha256": "5e9bf6a35c51d4d6e7ff9e41fd825455c94d1bf8994b8d69fb6a6f62a68c849e"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "outer_has_proxy_guard.html",
-        "sha256": "29d1ab74b871ae71598788d876a823b2a3abc392bcc46cd3a5ea11a68cfb6cdd"
+        "sha256": "fe55e3b67bcac971322725c80fdcb30643aec244d29afd1fc651ddad86ec0c3a"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "outer_inert.html",
-        "sha256": "bb79b0d63c723d8162fb55a7f9bc4b024c7710646086f4484fbdf0d5a4274b71"
+        "sha256": "f8469360454a7125f531856c69b5ee8dd68eb5f8f0762315a406ef05ecaa6967"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "outer_pointer_events.html",
-        "sha256": "74b2e7616df4a293ed427d41a532fdf2f091bad22ed882e9fec046011be4970a"
+        "sha256": "0d3a56ab0faf3caa96187e919f73ca9bf187fd1c9dcd6d509aa9e284fade80a2"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "outer_zero_area.html",
-        "sha256": "d7f15ced866efc7038cabce43a811a39efe5890718f6e7819ad1eed92d9afe4f"
+        "sha256": "7a5d34ff251f79c61d2ef7597814d43f6f46360594ce66c0605d2efd702c9fd5"
       },
       {
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "prompt_injection.html",
-        "sha256": "ef196a92eed4453abcc5e129eed583109229096d33cd569eae8f60612d89832e"
+        "sha256": "7aea9c329743043f4596b2a9569f31f07d44da13eb00b2dec37e371e2480d2bc"
       },
       {
         "expected_reason_code": "SELECTOR_DRIFT",
@@ -163,7 +157,7 @@
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "unreviewed_hidden_control.html",
-        "sha256": "84b9785d460a126e17a9d70373f0320e9dd70f69b332b2f8bce97ae47ca1f0e4"
+        "sha256": "67deb0f454cca570188766abb7ace81f1879dcbd1e3e70277195b24c4d46aa6d"
       },
       {
         "expected_reason_code": null,
@@ -175,12 +169,12 @@
         "expected_reason_code": null,
         "expected_state": "form",
         "file": "wrong_method.html",
-        "sha256": "bf5af3021504af949b2ddf96cae7c8475860c381fdcdcc69bcf55b36d5f4b8e4"
+        "sha256": "f042b30765636b017cc4a911f46eb1e1502d9d9f393a55d919f2d3a7cf68e55a"
       }
     ],
     "digest_algorithm": "sha256-manifest-v1",
-    "fixture_count": 28,
-    "fixture_digest": "24a32ca624d34c99d3c3d275c5ea8a6e1351f88c6ad99a7bcc77cd354e01f215",
+    "fixture_count": 27,
+    "fixture_digest": "a6daab38f3826bec1f083653e1a9c6102729d8a850567ee0d93898bca6aba8ff",
     "fixture_directory": "tests/fixtures/lever_v1"
   },
   "interpretation": "Sanitized offline fixture qualification only. It does not qualify a real form, a live canary, or an external final action.",
@@ -191,7 +185,7 @@
     "qualified_form_scope": [],
     "real_url_dry_run": "pending"
   },
-  "recorded_on": "2026-07-27",
+  "recorded_on": "2026-08-09",
   "safety_observations": {
     "external_network_used": false,
     "final_action_performed": false,

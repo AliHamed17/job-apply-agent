@@ -26,12 +26,12 @@ def test_generated_adapter_matrix_is_current_and_fixture_only() -> None:
         "live_canaries_completed": 0,
         "qualified_form_scopes": 0,
         "real_url_dry_runs_completed": 0,
-        "sanitized_fixtures": 87,
+        "sanitized_fixtures": 86,
     }
     assert [(row["adapter"], row["fixture_count"]) for row in matrix["adapters"]] == [
         ("workday", 9),
         ("greenhouse", 22),
-        ("lever", 28),
+        ("lever", 27),
         ("ashby", 13),
         ("smartrecruiters", 15),
     ]

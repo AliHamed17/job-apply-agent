@@ -1,22 +1,33 @@
 # Lever Browser v1 Qualification
 
-Recorded: 2026-07-27
+Recorded: 2026-08-09
 
 Achieved tier: `fixture_qualified`
 
 This artifact records sanitized offline fixture qualification for the `lever`
-adapter `1.0.0`, selector `lever-candidate-v2`, using the `two-phase-v2`
+adapter `1.0.0`, selector `lever-candidate-v5`, using the `two-phase-v2`
 execution contract.
+
+Re-earned the same day as v3 through v5: the selector contract was rewritten
+from a real, completed submission (jobs.lever.co/collate), which disproved
+v2's markup assumptions entirely. All twenty-seven fixtures were rebuilt
+against the current contract — real markup plus one labeled mutation each
+where the scenario doesn't require Lever-specific evidence, explicitly
+hypothetical where it does (a custom select/radio/consent question, none
+observed on the one real submission) — rather than left claiming a tier the
+evidence no longer supported. See
+`docs/superpowers/plans/2026-08-05-p1-lever-first-capture-and-selectors.md`
+for the full evidence trail.
 
 ## Evidence
 
-- Twenty-eight sanitized HTML fixtures cover exact candidate identity, standard
+- Twenty-seven sanitized HTML fixtures cover exact candidate identity, standard
   and custom controls, selected-CV attachment, consent, login, MFA, challenge,
-  closed and already-applied states, selector drift, form-action drift,
-  unreviewed controls, prompt injection, outer-wrapper actionability, a CSS
-  `:has(...)` mutation guard, and exact visible confirmation.
+  closed and already-applied states, selector drift, duplicate/ambiguous
+  fields, unreviewed controls, prompt injection, outer-wrapper actionability,
+  a CSS `:has(...)` mutation guard, and exact visible confirmation.
 - Fixture manifest digest:
-  `24a32ca624d34c99d3c3d275c5ea8a6e1351f88c6ad99a7bcc77cd354e01f215`.
+  `a6daab38f3826bec1f083653e1a9c6102729d8a850567ee0d93898bca6aba8ff`.
 - Adversarial tests bind every reviewed decision and the selected CV bytes to
   the exact native multipart payload.
 - No external network request or irreversible final action was performed.

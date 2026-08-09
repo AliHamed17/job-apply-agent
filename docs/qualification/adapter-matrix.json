@@ -42,16 +42,16 @@
       "adapter_version": "1.0.0",
       "execution_contract_version": "two-phase-v2",
       "final_external_action_enabled": false,
-      "fixture_count": 28,
-      "fixture_digest": "24a32ca624d34c99d3c3d275c5ea8a6e1351f88c6ad99a7bcc77cd354e01f215",
+      "fixture_count": 27,
+      "fixture_digest": "a6daab38f3826bec1f083653e1a9c6102729d8a850567ee0d93898bca6aba8ff",
       "live_canary_completed": false,
       "qualified_form_scope_count": 0,
       "real_url_dry_run_completed": false,
-      "recorded_on": "2026-07-27",
-      "selector_version": "lever-candidate-v2",
+      "recorded_on": "2026-08-09",
+      "selector_version": "lever-candidate-v5",
       "source_json": "docs/qualification/lever-browser-v1.json",
       "source_markdown": "docs/qualification/lever-browser-v1.md",
-      "source_report_digest": "be09fa7d5e57ffe906703fedd0b787a83baee3ec34dd3f4ce7298239eb2de2da",
+      "source_report_digest": "35d9610742fb85cab981dc27366bae830abd5a1ae65c888f899a76825898a97e",
       "transport": "browser"
     },
     {
@@ -99,6 +99,6 @@
     "live_canaries_completed": 0,
     "qualified_form_scopes": 0,
     "real_url_dry_runs_completed": 0,
-    "sanitized_fixtures": 87
+    "sanitized_fixtures": 86
   }
 }

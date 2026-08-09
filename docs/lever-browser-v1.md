@@ -48,7 +48,7 @@ network or browser work.
 ## Qualification state
 
 - Adapter: `lever` `1.0.0`
-- Selector: `lever-candidate-v2`
+- Selector: `lever-candidate-v5`
 - Transport: isolated local candidate browser
 - Current tier: `fixture_qualified`
 - Real-URL dry run: pending explicit operator-selected URL

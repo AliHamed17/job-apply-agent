@@ -92,6 +92,7 @@ def _validate_markdown_pair(path: Path, *, fixture_count: int) -> None:
         13: "Thirteen",
         15: "Fifteen",
         22: "Twenty-two",
+        27: "Twenty-seven",
         28: "Twenty-eight",
     }
     expected_word = fixture_words.get(fixture_count)

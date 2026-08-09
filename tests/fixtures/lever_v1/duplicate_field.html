@@ -1,8 +1,117 @@
-<!doctype html>
-<html lang="en"><body>
-<form data-qa="application-form" data-site="sample-company" data-posting-id="11111111-2222-4333-8444-555555555555" action="https://jobs.lever.co/sample-company/11111111-2222-4333-8444-555555555555/apply" method="post" enctype="multipart/form-data">
-  <div data-qa="application-field" data-field-id="duplicate"><label>Name</label><input name="name"></div>
-  <div data-qa="application-field" data-field-id="duplicate"><label>Email</label><input name="email"></div>
-  <button data-qa="btn-submit" type="submit">Submit application</button>
-</form>
-</body></html>
+<html>
+ <body>
+  <form enctype="multipart/form-data" id="application-form" method="POST">
+   <div class="section page-centered application-form">
+    <h4>
+     Submit your application
+    </h4>
+    <ul>
+     <li class="application-question resume">
+      <label>
+       <div class="application-label">
+        Resume/CV
+       </div>
+       <div class="application-field">
+        <a class="postings-btn template-btn-utility visible-resume-upload">
+         <span class="filename">
+         </span>
+         <span class="default-label">
+          ATTACH RESUME/CV
+         </span>
+         <input class="application-file-input invisible-resume-upload" data-qa="input-resume" id="resume-upload-input" name="resume" type="file"/>
+        </a>
+        <span class="resume-upload-failure">
+         <div class="resume-upload-label">
+          Couldn't auto-read resume.
+         </div>
+        </span>
+        <span class="resume-upload-working">
+         <div class="loading-indicator">
+         </div>
+         <div class="resume-upload-label">
+          Analyzing resume...
+         </div>
+        </span>
+        <span class="resume-upload-success">
+         <div class="loading-indicator completed">
+         </div>
+         <div class="resume-upload-label">
+          Success!
+         </div>
+        </span>
+       </div>
+      </label>
+      <span class="resume-upload-oversize">
+       <p class="error-message">
+        File exceeds the maximum upload size of
+        <b>
+         100MB
+        </b>
+        . Please try a smaller size.
+       </p>
+      </span>
+     </li>
+     <li class="application-question">
+      <label>
+       <div class="application-label">
+        Full name
+        <span class="required">
+         ✱
+        </span>
+       </div>
+       <div class="application-field">
+        <input data-qa="name-input" name="name" required="" type="text"/>
+       </div>
+      </label>
+     </li>
+    </ul>
+   </div>
+   <!--
+     A wrapper duplicating another wrapper's control name is not observed on
+     any real posting -- it would mean two different questions accidentally
+     posting to the same field, a markup bug rather than a real Lever
+     pattern. That's exactly what this fixture is for: proving
+     observe_lever_v1_fields's seen_ids check (in lever_v1.py) still catches
+     two wrappers producing the same derived field_id, now under the real
+     v3+ wrapper shape instead of the old, disproven data-field-id
+     assumption this fixture used to encode.
+   -->
+   <div class="section page-centered application-form">
+    <h4>
+     Additional questions
+    </h4>
+    <ul>
+     <li class="application-question">
+      <label>
+       <div class="application-label">
+        Preferred name
+       </div>
+       <div class="application-field">
+        <input name="name" type="text"/>
+       </div>
+      </label>
+     </li>
+    </ul>
+   </div>
+   <input name="accountId" type="hidden"/>
+   <input name="linkedInData" type="hidden"/>
+   <input name="origin" type="hidden"/>
+   <input name="referer" type="hidden"/>
+   <input id="applicant-timezone" name="timezone" type="hidden"/>
+   <input name="socialReferralKey" type="hidden"/>
+   <input name="socialSource" type="hidden"/>
+   <input name="resumeStorageId" type="hidden"/>
+   <input id="hcaptchaResponseInput" name="h-captcha-response" type="hidden"/>
+   <button class="hidden" id="hcaptchaSubmitBtn" type="submit">
+   </button>
+   <input name="source" type="hidden"/>
+   <div class="h-captcha" data-sitekey="e33f87f8-88ec-4e1a-9a13-df9bbb1d8120" id="h-captcha">
+   </div>
+   <div class="section page-centered application-form last-section-apply">
+    <button class="postings-btn template-btn-submit hex-color" data-qa="btn-submit" id="btn-submit" type="button">
+     Submit application
+    </button>
+   </div>
+  </form>
+ </body>
+</html>

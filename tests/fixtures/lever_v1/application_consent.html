@@ -1,12 +1,118 @@
-<!doctype html>
-<html lang="en"><body>
-<form data-qa="application-form" data-site="sample-company" data-posting-id="11111111-2222-4333-8444-555555555555" action="https://jobs.lever.co/sample-company/11111111-2222-4333-8444-555555555555/apply" method="post" enctype="multipart/form-data">
-  <div data-qa="application-field" data-field-id="privacy-consent" data-control-kind="consent">
-    <label>I consent to the stated privacy notice</label><input type="checkbox" name="consent" value="accepted" required>
-  </div>
-  <div data-qa="application-field" data-field-id="candidate-resume" data-canonical-name="resume">
-    <label>Resume</label><input type="file" name="resume" accept=".pdf" required>
-  </div>
-  <button data-qa="btn-submit" type="submit">Submit application</button>
-</form>
-</body></html>
+<html>
+ <body>
+  <form enctype="multipart/form-data" id="application-form" method="POST">
+   <div class="section page-centered application-form">
+    <h4>
+     Submit your application
+    </h4>
+    <ul>
+     <li class="application-question resume">
+      <label>
+       <div class="application-label">
+        Resume/CV
+       </div>
+       <div class="application-field">
+        <a class="postings-btn template-btn-utility visible-resume-upload">
+         <span class="filename">
+         </span>
+         <span class="default-label">
+          ATTACH RESUME/CV
+         </span>
+         <input class="application-file-input invisible-resume-upload" data-qa="input-resume" id="resume-upload-input" name="resume" type="file"/>
+        </a>
+        <span class="resume-upload-failure">
+         <div class="resume-upload-label">
+          Couldn't auto-read resume.
+         </div>
+        </span>
+        <span class="resume-upload-working">
+         <div class="loading-indicator">
+         </div>
+         <div class="resume-upload-label">
+          Analyzing resume...
+         </div>
+        </span>
+        <span class="resume-upload-success">
+         <div class="loading-indicator completed">
+         </div>
+         <div class="resume-upload-label">
+          Success!
+         </div>
+        </span>
+       </div>
+      </label>
+      <span class="resume-upload-oversize">
+       <p class="error-message">
+        File exceeds the maximum upload size of
+        <b>
+         100MB
+        </b>
+        . Please try a smaller size.
+       </p>
+      </span>
+     </li>
+    </ul>
+   </div>
+   <!--
+     HYPOTHETICAL, and known to be a weaker guess than the other fixtures in
+     this file: data-control-kind="consent" is not just unverified, there is
+     COUNTER-evidence against it. Earlier read-only reconnaissance against
+     real, unfilled Lever postings (see the P1 plan doc's blank-form recon
+     section) found a real consent question is structurally just an ordinary
+     radio question ("Yes, I consent" / "No, I do not consent"), not a
+     control carrying any special attribute. _control_type() in lever_v1.py
+     still only recognizes data-control-kind="consent" -- which means, if
+     that recon is representative, a real consent question would currently
+     be classified as plain FieldType.RADIO, not FieldType.CONSENT, and
+     would NOT get routed through the mandatory-operator-review path
+     field_requires_operator_review()/SensitiveCategory.CONSENT exists for.
+     That is a real, safety-relevant gap, not just an untested scenario --
+     already flagged in the plan doc as needing label-text matching instead
+     of a structural marker, and explicitly out of scope to redesign in this
+     pass (it touches core/form_planning.py's answer policy, not just this
+     file). This fixture exists only to prove _control_type's OWN routing
+     logic works correctly once a field IS classified as CONSENT -- it is
+     not a claim this is what a real consent question's markup looks like.
+   -->
+   <div class="section page-centered application-form">
+    <h4>
+     Additional questions
+    </h4>
+    <ul>
+     <li class="application-question" data-control-kind="consent">
+      <label>
+       <div class="application-label">
+        I consent to the stated privacy notice
+        <span class="required">
+         ✱
+        </span>
+       </div>
+       <div class="application-field">
+        <input name="consent" required="" type="checkbox" value="accepted"/>
+       </div>
+      </label>
+     </li>
+    </ul>
+   </div>
+   <input name="accountId" type="hidden"/>
+   <input name="linkedInData" type="hidden"/>
+   <input name="origin" type="hidden"/>
+   <input name="referer" type="hidden"/>
+   <input id="applicant-timezone" name="timezone" type="hidden"/>
+   <input name="socialReferralKey" type="hidden"/>
+   <input name="socialSource" type="hidden"/>
+   <input name="resumeStorageId" type="hidden"/>
+   <input id="hcaptchaResponseInput" name="h-captcha-response" type="hidden"/>
+   <button class="hidden" id="hcaptchaSubmitBtn" type="submit">
+   </button>
+   <input name="source" type="hidden"/>
+   <div class="h-captcha" data-sitekey="e33f87f8-88ec-4e1a-9a13-df9bbb1d8120" id="h-captcha">
+   </div>
+   <div class="section page-centered application-form last-section-apply">
+    <button class="postings-btn template-btn-submit hex-color" data-qa="btn-submit" id="btn-submit" type="button">
+     Submit application
+    </button>
+   </div>
+  </form>
+ </body>
+</html>

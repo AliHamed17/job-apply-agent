@@ -25,12 +25,15 @@ _PLANNED_FIRST_FIVE = {
     "greenhouse",
     "ashby",
     "smartrecruiters",
+    "lever",
 }
-# lever moved to DRY_RUN_ONLY: the v3 selector contract is evidence-backed
-# (a real, completed submission -- see submitters/lever_v1.py) but only one
-# fixture reflects it so far, not the comprehensive baseline
-# FIXTURE_QUALIFIED is meant to certify. See the P1 plan doc.
-_DRY_RUN_ONLY_PLATFORMS = {"lever"}
+# lever spent part of 2026-08-06 at DRY_RUN_ONLY: the v3+ selector contract
+# was evidence-backed (a real, completed submission -- see
+# submitters/lever_v1.py) but only one fixture reflected it, not the
+# comprehensive baseline FIXTURE_QUALIFIED certifies. Re-promoted the same
+# day once the other 24 fixtures were rebuilt against the current contract.
+# See the P1 plan doc.
+_DRY_RUN_ONLY_PLATFORMS: set[str] = set()
 _SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
 
@@ -136,22 +139,21 @@ async def test_ats_inventory_exposes_fixture_only_browser_adapters_as_send_disab
 
 
 @pytest.mark.asyncio
-async def test_ats_inventory_exposes_dry_run_only_lever_as_send_disabled():
-    """lever sits at dry_run_only, not fixture_qualified: v3's selector
-    contract is backed by a real, completed submission (see
-    submitters/lever_v1.py and the P1 plan doc), but only one fixture
-    reflects it -- the comprehensive fixture baseline FIXTURE_QUALIFIED is
-    meant to certify has not been migrated from the old, disproven v2
-    markup. Either tier disables final execution identically; this is
-    about not claiming more evidence than actually exists."""
+async def test_ats_inventory_exposes_fixture_only_lever_as_send_disabled():
+    """lever's v3+ selector contract is backed by a real, completed
+    submission (see submitters/lever_v1.py and the P1 plan doc); the
+    24-fixture backlog that briefly left it at dry_run_only (only one
+    fixture reflected the real contract) was rebuilt the same day, real
+    markup plus one labeled mutation each where evidence-independent,
+    explicitly hypothetical where not -- see the P1 plan doc."""
     inventory = await list_ats_adapters()
     lever = next(adapter for adapter in inventory if adapter.ats == "lever")
 
-    assert lever.qualification_tier == "dry_run_only"
+    assert lever.qualification_tier == "fixture_qualified"
     assert lever.final_execution_enabled is False
     assert lever.qualified_form_scope == []
     assert lever.adapter_version == "1.0.0"
-    assert lever.selector_version == "lever-candidate-v4"
+    assert lever.selector_version == "lever-candidate-v5"
     assert lever.transport == "browser"
     assert lever.authentication_mode == "public_candidate_flow"
 

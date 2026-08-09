@@ -128,19 +128,25 @@ _ADAPTERS: tuple[AdapterDescriptor, ...] = (
         platform="lever",
         adapter_version="1.0.0",
         # v3 replaces v2, which never matched real markup; v4 fixes v3's
-        # label-extraction imprecision (see submitters/lever_v1.py for both).
-        # Deliberately NOT re-claiming FIXTURE_QUALIFIED here: that tier
-        # means the committed fixture baseline passes, and only one fixture
-        # (built from a real, completed submission) reflects the current
-        # contract so far -- the other 24 v2 fixtures still encode the old,
-        # wrong markup and have not been migrated. DRY_RUN_ONLY is the
-        # honest claim: real evidence backs the code, a comprehensive
-        # fixture baseline does not yet.
-        selector_version="lever-candidate-v4",
+        # label-extraction imprecision; v5 makes _visible() recognize
+        # content-visibility:hidden (see submitters/lever_v1.py for all
+        # three). Re-claimed FIXTURE_QUALIFIED (2026-08-06): the previously
+        # unmigrated 24-fixture backlog is now fully rebuilt against this
+        # contract -- real markup + one labeled mutation per fixture where
+        # the scenario doesn't require Lever-specific evidence
+        # (wrong_method.html, the outer_* actionability fixtures, ...),
+        # explicitly hypothetical where it does (application_consent.html's
+        # detection mechanism has counter-evidence, not just absence of
+        # evidence -- see the P1 plan doc), and one fixture retired outright
+        # (invalid_action.html tested a check v3 already deleted). This tier
+        # still means only "the committed fixture baseline passes" -- it is
+        # not FINAL_SUBMIT_ENABLED, not a dry-run or live-canary claim; see
+        # qualified_form_scope=() and allows_live_submission below.
+        selector_version="lever-candidate-v5",
         transport="browser",
         authentication_mode="public_candidate_flow",
         supported_controls=_COMMON_CONTROLS,
-        qualification=QualificationTier.DRY_RUN_ONLY,
+        qualification=QualificationTier.FIXTURE_QUALIFIED,
         qualified_form_scope=(),
         domains=("jobs.lever.co", "jobs.eu.lever.co"),
         execution_contract_version=TWO_PHASE_EXECUTION_CONTRACT_VERSION,

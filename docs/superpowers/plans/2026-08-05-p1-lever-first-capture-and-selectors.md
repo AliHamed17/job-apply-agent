@@ -425,59 +425,131 @@ as the original task list:
   hand-editing the committed hash). Left honestly failing rather than
   silently patched.
 
+### Task 2b: the 24-fixture backlog cleared, Lever re-promoted to FIXTURE_QUALIFIED (2026-08-09)
+
+Follow-up items 1 and 2 from the prior pass, done in one sweep the same day:
+
+- [x] All 24 remaining `tests/fixtures/lever_v1/*.html` fixtures migrated or
+  retired, per the categorization reconnaissance from the prior pass:
+  - **Real markup + one labeled mutation, no new evidence needed**
+    (`wrong_method.html`, `disabled_submit.html`,
+    `unreviewed_hidden_control.html`, the four `outer_*` actionability
+    fixtures, `multiple_resume.html`, `duplicate_field.html`): rebuilt from
+    `application_basic.html`'s actual structure with exactly one deliberate
+    change each. `duplicate_field.html`'s old premise (`data-field-id`
+    collision) doesn't exist under v3+ at all — rebuilt as the real
+    equivalent, two wrappers whose controls share one `name` (the
+    `field_id in seen_ids` check `observe_lever_v1_fields` still has).
+  - **`outer_has_proxy_guard.html`**: same treatment, but keeping the real
+    hidden system fields instead of `authenticity_token` (proven fictitious
+    this session) — the fixture's whole point is proving a CSS `:has()`
+    guard doesn't fool static actionability checking, so it must actually
+    reach and pass `lever_v1_final_action_binding`, not just `FORM` state.
+  - **Retired outright**: `invalid_action.html` — its premise (an
+    action-URL mismatch check) was deleted in the v3 rewrite, confirmed by
+    that code's own comment; migrating it would mean re-adding a check the
+    rewrite intentionally removed. Fixture deleted, its
+    `test_unreviewed_or_invalid_final_boundary_fails_before_plan`
+    parametrize entry removed, fixture count 28 → 27 everywhere that counts
+    it.
+  - **Explicitly hypothetical, real wrapper shape + honestly-labeled
+    guessed content** (`application_custom_select.html`,
+    `application_radio_checkbox.html`, `application_consent.html`): none of
+    these scenarios appear in the one real capture. Each fixture carries an
+    HTML comment stating exactly what's evidence-backed (the
+    `li.application-question` wrapper shape; the `cards[<uuid>][fieldN]`
+    survey-question naming convention, confirmed via the earlier blank-form
+    recon) versus what's a plausible construction. `application_consent.html`
+    is the weakest of the three on purpose, documented as such: blank-form
+    recon found real consent questions are structurally ordinary radio
+    questions, not a `data-control-kind="consent"`-bearing control, meaning
+    `_control_type()`'s only detection mechanism likely doesn't match real
+    Lever markup at all — a live, safety-relevant gap (a real consent
+    question could be misread as an ordinary field and skip the mandatory
+    operator-review path `SensitiveCategory.CONSENT` exists for), not just
+    an untested scenario. Not redesigned here — explicitly out of scope,
+    same as before (touches `core/form_planning.py`'s answer policy).
+  - **Also migrated, found along the way**: `prompt_injection.html` was
+    completely unreferenced by any test (confirmed by grep) despite being a
+    committed fixture — migrated to real markup and given an actual test
+    (`test_hostile_question_label_is_observed_and_flagged_for_review`)
+    proving `field_requires_operator_review` catches its hostile label,
+    closing a real, previously-silent test-coverage gap.
+- [x] **A fifth selector-version-worthy finding, found migrating
+  `outer_content_visibility.html`**: `_visible()` checked
+  `display:none`/`visibility:hidden`/`opacity:0` but not
+  `content-visibility:hidden` — a standard CSS property that also fully
+  hides an element, and one `_static_actionability_capture` *already*
+  recognized a few lines below for actionability purposes. Inconsistent,
+  not evidence-dependent (a CSS-semantics fix, not a markup-shape claim),
+  and a real gap: a page (or an injected wrapper) hiding a form this way
+  would previously have been read as visible. Fixed by adding the marker to
+  `_visible()`'s existing style check. `LEVER_V1_SELECTOR_VERSION` bumped
+  `v4` → `v5` (same lockstep-update discipline as v2→v3 and v3→v4).
+- [x] **Lever re-promoted `DRY_RUN_ONLY` → `FIXTURE_QUALIFIED`**
+  (`submitters/platforms.py`): the tier's own definition — "the committed
+  fixture baseline passes" — is now honestly met; all 27 fixtures pass
+  against the real v5 contract. `allows_live_submission`/
+  `allows_final_execution` remain gated on `LIVE_CANARY_QUALIFIED` and an
+  exact `qualified_form_scope`, neither of which this touches — no change
+  to what's actually allowed to execute, only to what evidence-backed claim
+  the tier makes.
+- [x] `docs/qualification/lever-browser-v1.json`/`.md` regenerated for
+  real: every fixture's SHA-256 and `assess_lever_v1_snapshot` result
+  recomputed directly from the current files and current code (not
+  hand-typed), fixture manifest digest recomputed the same way the test
+  (`test_report_binds_exact_fixture_bytes_states_and_manifest`) verifies it.
+  Every fixture's expected state/reason came out identical to the old
+  (stale-version) report's claims — the migration didn't change any
+  documented behavior, only made the claim honestly earned again.
+  `scripts/build_adapter_qualification_matrix.py --write` regenerated
+  `docs/qualification/adapter-matrix.{json,md}` the proper way (a
+  `--write` mode already existed; not hand-edited). Needed one small,
+  evidence-independent script fix along the way: the markdown validator's
+  fixture-count → spelled-out-word map (`{9: "Nine", 13: "Thirteen", ...}`)
+  had no entry for 27, unconditionally rejecting any markdown with that
+  count regardless of content — added `27: "Twenty-seven"`.
+- [x] Full Lever-adjacent suite (`test_lever_v1_fixtures.py` +
+  `test_lever_browser_v1.py` + `test_adapter_qualification_gate.py` +
+  `test_application_response_form_plan_contract.py` +
+  `test_submission_evidence_contract.py` +
+  `test_lever_v1_qualification_report.py` +
+  `test_adapter_qualification_matrix.py`): **98 passed, 0 failed**. Full
+  repo suite (`pytest tests/ -q`, complete untruncated output, ~17 min):
+  **3 failed, 2964 passed, 20 skipped** — down from 26 failed/2941 passed at
+  the start of this pass. Every one of the 23 resolved failures was
+  Lever/qualification-related; the 3 remaining are `test_control_plane_runner_scripts.py`
+  and `test_webhook_ingest_text.py` (pre-existing/unrelated, confirmed via
+  `git stash` comparison earlier this session) and
+  `test_v4_local_model_qualification.py` (follow-up item 6 below, already
+  understood, not fixed here). `ruff check .`/`ruff format --check .` clean
+  on every touched file.
+
 ### Follow-up (not done in this pass, scoped so the next session can pick it up)
 
-1. Migrate or retire the other 24 `tests/fixtures/lever_v1/*.html` fixtures
-   (currently v2 markup, will `SELECTOR_DRIFT` against v4). A full
-   reconnaissance pass (per-fixture: real markup gap, exact failure cause,
-   what the test is actually trying to prove, mutation-vs-retire read) is
-   done and was used to plan this session's fixes; the remaining fixtures
-   split roughly into: generic actionability mutations honestly buildable
-   from `application_basic.html` with one labeled change each
-   (`wrong_method.html`, `unreviewed_hidden_control.html`,
-   `disabled_submit.html`, the four `outer_*` fixtures,
-   `outer_has_proxy_guard.html`), fixtures whose whole premise no longer
-   exists in v4 and should be retired outright rather than migrated
-   (`invalid_action.html` — v3 already deleted the action-URL check its own
-   code comment confirms this), and fixtures needing real evidence or an
-   explicit hypothetical label because the one real capture never showed the
-   scenario (`application_custom_select.html`, `application_radio_checkbox.html`,
-   `application_consent.html` — note `application_consent.html`'s detection
-   mechanism, `data-control-kind="consent"`, is itself unverified against any
-   real page, a second-order gap, not just an unseen scenario).
-   `test_fixture_set_is_sanitized_and_contains_no_live_identity` also needs
-   `application_basic.html` added to its allowlist (it currently requires
-   every fixture to contain the literal string `"sample-company"`, a v2-era
-   convention the real fixture never had occasion to carry).
-2. `docs/qualification/lever-browser-v1.json` and its `.md` counterpart are
-   now stale (still claim v2, `fixture_qualified`) and were deliberately left
-   unchanged rather than hand-edited to a false "passed" state — regenerating
-   them honestly needs the fixture migration above done first, the same
-   `chore(qualification): re-earn ... after the config change` pattern this
-   repo already uses elsewhere. This has one more consequence than it looks:
-   `scripts/build_adapter_qualification_matrix.py` (docstring: "the
-   deterministic, fixture-only first-five ATS qualification matrix")
-   structurally assumes all five first-wave adapters sit at the same
-   `FIXTURE_QUALIFIED` tier and hard-fails on any registry/report mismatch —
-   which Lever now is, correctly. `test_adapter_qualification_matrix.py`'s
-   two tests fail as a result. Fixing this for real means either fast-tracking
-   Lever's fixture migration back to parity with the other four, or teaching
-   the matrix script to represent a mixed-tier cohort — a real design
-   decision, not a mechanical fix, so left alone rather than guessed at here.
+1. ~~Migrate or retire the 24-fixture backlog~~ — done 2026-08-09, see
+   Task 2b above.
+2. ~~Regenerate the stale qualification report / fix the qualification
+   matrix mixed-tier failure~~ — done 2026-08-09, see Task 2b above.
 3. ~~Investigate the hCaptcha/`CHALLENGE_DETECTED` finding above~~ — done
    2026-08-06, see the checked item above.
 4. Investigate `LEVER_CONFIRMATION_SELECTOR` — ask the operator what the real
    post-submit page showed (screenshot or plain description), since the
-   capture tool itself found no match.
-5. **The real top priority for Task 3**: design and implement a way to
-   represent "an operator reviewed this exact field and confirmed leaving it
-   blank" in `core/submission_domain.py`/`core/form_planning.py` — see the
-   detailed finding above. Everything else in this follow-up list is
-   independent of Task 3 readiness; this one isn't.
+   capture tool itself found no match. Still open, still needs the operator.
+5. **The real top priority for Task 3, unchanged by today's fixture work**:
+   design and implement a way to represent "an operator reviewed this exact
+   field and confirmed leaving it blank" in
+   `core/submission_domain.py`/`core/form_planning.py` — see the detailed
+   finding above (Task 2, the `org`/`urls_Twitter_`/`urls_Other_` trace).
+   Everything else in this follow-up list is independent of Task 3
+   readiness; this one isn't. `application_consent.html`'s detection-
+   mechanism gap (Task 2b above) is a second, related design item that
+   likely wants the same sitting-down session — both touch
+   `core/form_planning.py`'s answer policy.
 6. Re-earn `scripts/evaluate_v4_local_model_qualification.py`'s committed
    report (`test_v4_local_model_qualification.py::test_committed_local_model_report_is_aggregate_only`
-   now fails on source-integrity, not logic — see above): unrelated to
-   Lever, a side effect of `core/submission_domain.py` being one of that
+   fails on source-integrity, not logic — see above): unrelated to Lever, a
+   side effect of `core/submission_domain.py` being one of that
    qualification's tracked source files. Needs an actual local-model
    evaluation run (`real_local_model: true`), not a quick fix — left
    honestly failing rather than faked.

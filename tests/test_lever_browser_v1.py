@@ -339,7 +339,7 @@ async def test_inspection_builds_auditable_plan_and_never_clicks(tmp_path) -> No
     assert isinstance(adapter, TwoPhaseSubmitter)
     assert plan.adapter_name == "lever"
     assert plan.adapter_version == "1.0.0"
-    assert plan.selector_version == "lever-candidate-v4"
+    assert plan.selector_version == "lever-candidate-v5"
     assert plan.selected_cv_id == plan.attached_cv_id == "fixture-cv"
     assert plan.selected_cv_hash == plan.attached_cv_hash == cv_hash
     assert [field.field_id for field in plan.fields] == [
@@ -607,12 +607,16 @@ async def test_selected_cv_bytes_are_read_once_before_path_mutation(tmp_path) ->
     assert session.click_calls == 0
 
 
-def test_dry_run_only_lever_is_not_an_ordinary_employer_inspector() -> None:
+def test_fixture_qualified_lever_is_not_an_ordinary_employer_inspector() -> None:
+    """get_inspector only returns an adapter at DRY_RUN_QUALIFIED or
+    LIVE_CANARY_QUALIFIED -- FIXTURE_QUALIFIED means the committed fixture
+    baseline passes, not that opening an arbitrary employer URL is
+    authorized, so this holds the same way it did at DRY_RUN_ONLY."""
     registry = get_two_phase_registry()
     descriptor = adapter_for_platform("lever")
 
     assert registry.get_inspector(_job()) is None
     assert descriptor is not None
-    assert descriptor.qualification is QualificationTier.DRY_RUN_ONLY
+    assert descriptor.qualification is QualificationTier.FIXTURE_QUALIFIED
     assert descriptor.qualified_form_scope == ()
     assert descriptor.allows_final_execution is False

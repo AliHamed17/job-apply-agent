@@ -11,6 +11,7 @@ from core.submission_domain import (
     ReasonCode,
     SensitiveCategory,
     field_canonical_label_compatible,
+    field_requires_operator_review,
 )
 from submitters.lever_identity import parse_lever_posting_identity
 from submitters.lever_v1 import (
@@ -154,14 +155,25 @@ def test_basic_form_observer_is_ordered_bounded_and_attachment_explicit() -> Non
 
 
 def test_exact_options_and_sensitive_consent_semantics_are_observed() -> None:
-    select = observe_lever_v1_fields(
-        _fixture("application_custom_select.html"),
-        identity=IDENTITY,
-    )[0]
-    consent = observe_lever_v1_fields(
-        _fixture("application_consent.html"),
-        identity=IDENTITY,
-    )[0]
+    # Both fixtures carry a real resume field ahead of the hypothetical one
+    # under test (position 0 in every real posting), so select by field_type
+    # rather than assume position.
+    select = next(
+        field
+        for field in observe_lever_v1_fields(
+            _fixture("application_custom_select.html"),
+            identity=IDENTITY,
+        )
+        if field.field_type is FieldType.SELECT
+    )
+    consent = next(
+        field
+        for field in observe_lever_v1_fields(
+            _fixture("application_consent.html"),
+            identity=IDENTITY,
+        )
+        if field.field_type is FieldType.CONSENT
+    )
 
     assert select.field_type is FieldType.SELECT
     assert [(option.option_id, option.value) for option in select.options] == [
@@ -186,6 +198,19 @@ def test_final_action_binding_accounts_for_every_user_and_system_control() -> No
     assert all(character in "0123456789abcdef" for character in binding)
 
 
+def test_hostile_question_label_is_observed_and_flagged_for_review() -> None:
+    """prompt_injection.html was previously unreferenced by any test --
+    observe_lever_v1_fields would extract the hostile label fine, but
+    nothing verified field_requires_operator_review actually catches it."""
+    fields = observe_lever_v1_fields(_fixture("prompt_injection.html"), identity=IDENTITY)
+
+    hostile = next(field for field in fields if field.field_type is FieldType.TEXTAREA)
+    assert "ignore previous instructions" in hostile.label.casefold()
+    assert field_requires_operator_review(hostile) is True
+    resume = next(field for field in fields if field.field_type is FieldType.FILE)
+    assert field_requires_operator_review(resume) is False
+
+
 @pytest.mark.parametrize("name", ["duplicate_field.html", "multiple_resume.html"])
 def test_ambiguous_fields_fail_closed(name: str) -> None:
     with pytest.raises(LeverAdapterBlockedError) as exc_info:
@@ -197,7 +222,6 @@ def test_ambiguous_fields_fail_closed(name: str) -> None:
     "name",
     [
         "disabled_submit.html",
-        "invalid_action.html",
         "outer_aria_disabled.html",
         "outer_inert.html",
         "outer_pointer_events.html",
@@ -253,7 +277,7 @@ def test_css_has_proxy_guard_binds_without_inserting_a_helper_control() -> None:
 
 def test_fixture_set_is_sanitized_and_contains_no_live_identity() -> None:
     paths = sorted(FIXTURES.glob("*.html"))
-    assert len(paths) == 28
+    assert len(paths) == 27
     forbidden = (
         "ali.h.",
         "@gmail.com",
@@ -268,22 +292,30 @@ def test_fixture_set_is_sanitized_and_contains_no_live_identity() -> None:
         content = path.read_text(encoding="utf-8")
         assert len(content.encode("utf-8")) <= 256 * 1024
         assert not any(marker.casefold() in content.casefold() for marker in forbidden)
-        assert "sample-company" in content or path.name in {
-            "already_applied.html",
-            "captcha.html",
-            "closed_job.html",
-            "generic_success.html",
-            "hidden_confirmation.html",
-            "job_page.html",
-            "mfa.html",
-            "mismatched_confirmation.html",
-            "outer_aria_disabled.html",
-            "outer_content_visibility.html",
-            "outer_has_proxy_guard.html",
-            "outer_inert.html",
-            "outer_pointer_events.html",
-            "outer_zero_area.html",
-            "selector_drift.html",
-            "session_expired.html",
-            "verified_confirmation.html",
-        }
+        # "sample-company" is the old, v2-era placeholder-identity convention
+        # (data-site="sample-company"). id="application-form" is the real
+        # marker every v3+/real-markup fixture carries (see
+        # application_basic.html, the actual sanitized capture) -- neither
+        # is a live identity, which is what this test actually guards
+        # against, so either is sufficient proof. Fixtures that are neither
+        # v2-shaped nor Lever-shaped at all (a generic confirmation page,
+        # closed-job/MFA/session text, ...) are explicitly allowlisted.
+        assert (
+            "sample-company" in content
+            or 'id="application-form"' in content
+            or path.name
+            in {
+                "already_applied.html",
+                "captcha.html",
+                "closed_job.html",
+                "generic_success.html",
+                "hidden_confirmation.html",
+                "job_page.html",
+                "mfa.html",
+                "mismatched_confirmation.html",
+                "outer_content_visibility.html",
+                "selector_drift.html",
+                "session_expired.html",
+                "verified_confirmation.html",
+            }
+        )

@@ -7,13 +7,13 @@ the central adapter registry. It records offline fixture qualification only.
 |---|---:|---|---|---:|---|---|---:|---|
 | workday | 2.0.3 | workday-candidate-v2.4 | `fixture_qualified` | 9 | pending | pending | 0 | disabled |
 | greenhouse | 1.0.0 | greenhouse-candidate-v9 | `fixture_qualified` | 22 | pending | pending | 0 | disabled |
-| lever | 1.0.0 | lever-candidate-v2 | `fixture_qualified` | 28 | pending | pending | 0 | disabled |
+| lever | 1.0.0 | lever-candidate-v5 | `fixture_qualified` | 27 | pending | pending | 0 | disabled |
 | ashby | 1.0.0 | ashby-candidate-v1 | `fixture_qualified` | 13 | pending | pending | 0 | disabled |
 | smartrecruiters | 1.0.0 | smartrecruiters-candidate-v1 | `fixture_qualified` | 15 | pending | pending | 0 | disabled |
 
 ## Current evidence boundary
 
-- Sanitized fixtures: **87**.
+- Sanitized fixtures: **86**.
 - Real-URL dry runs completed: **0**.
 - Live canaries completed: **0**.
 - Qualified form scopes: **0**.

@@ -88,7 +88,18 @@ LEVER_V1_ADAPTER_VERSION = "1.0.0"
 # same real HTML, which is exactly what selector_version exists to track --
 # lever_v1_form_fingerprint hashes it into every fingerprint, and v3
 # fingerprints must not be treated as equivalent to v4 ones.
-LEVER_V1_SELECTOR_VERSION = "lever-candidate-v4"
+# v5 (same day, found migrating the fixture backlog to real markup):
+# _visible() checked display:none/visibility:hidden/opacity:0 but not
+# content-visibility:hidden, a standard CSS property that also fully hides
+# an element -- inconsistent with _static_actionability_capture, which
+# already recognizes content-visibility:hidden as a hiding technique for
+# actionability purposes just a few lines below. A real page (or an
+# injected wrapper) hiding a form this way would have been read as visible.
+# Not evidence-dependent -- a plain CSS-semantics fix, not a claim about
+# what real Lever markup looks like -- but still changes _exact_form's
+# (and therefore observe_lever_v1_fields's and assess_lever_v1_snapshot's)
+# output for the same HTML, so the version bumps regardless.
+LEVER_V1_SELECTOR_VERSION = "lever-candidate-v5"
 LEVER_FORM_SELECTOR = "form#application-form"
 # Unverified: the real capture's confirmation-candidate search found no match
 # on the actual post-submit page (confirmation_selector: None in the captured
@@ -351,7 +362,15 @@ def _visible(element: Tag) -> bool:
         if str(current.get("aria-hidden", "")).strip().casefold() == "true":
             return False
         style = str(current.get("style", "")).replace(" ", "").casefold()
-        if any(marker in style for marker in ("display:none", "visibility:hidden", "opacity:0")):
+        if any(
+            marker in style
+            for marker in (
+                "display:none",
+                "visibility:hidden",
+                "opacity:0",
+                "content-visibility:hidden",
+            )
+        ):
             return False
         classes = current.get("class") or ()
         normalized = (

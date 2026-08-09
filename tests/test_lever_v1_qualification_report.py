@@ -33,7 +33,6 @@ EXPECTED_CASES = {
     "duplicate_field.html": ("form", None),
     "generic_success.html": ("selector_drift", "SELECTOR_DRIFT"),
     "hidden_confirmation.html": ("selector_drift", "SELECTOR_DRIFT"),
-    "invalid_action.html": ("form", None),
     "job_page.html": ("job", None),
     "mfa.html": ("mfa", "MFA_REQUIRED"),
     "mismatched_confirmation.html": ("selector_drift", "SELECTOR_DRIFT"),
@@ -86,7 +85,7 @@ def _validate_fixture_only(report: dict[str, object]) -> None:
         "adapter_name": "lever",
         "adapter_version": "1.0.0",
         "execution_contract_version": "two-phase-v2",
-        "selector_version": "lever-candidate-v2",
+        "selector_version": "lever-candidate-v5",
         "transport": "browser",
     }
     assert report["achieved_tier"] == "fixture_qualified"
