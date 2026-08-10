@@ -704,6 +704,10 @@ live canary with manual CAPTCHA/MFA handling.
 - [x] Real-Chromium rehearsal with `HTMLFormElement.prototype.submit` stubbed —
   confirms no request leaves before spending a real application on it. Also
   the natural point to verify Task 2d's rewrite against a real page.
+- [x] Guarded one-URL read-only selector inspection command added in
+  `scripts/lever_dry_run_smoke.py`; it requires dry-run mode and operator auth,
+  records only redacted field types/reasons, and never fills, uploads, clicks,
+  or creates qualification authority.
 - [ ] One real-URL dry run (`DRY_RUN=true`) against a **different** real Lever
   posting than the one captured, to catch overfitting to a single tenant's
   markup.

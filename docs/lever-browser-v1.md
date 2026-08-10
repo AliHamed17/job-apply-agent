@@ -55,6 +55,27 @@ network or browser work.
 - Live canary: pending explicit approval for one exact job
 - Final submission: disabled
 
+## Guarded real-URL selector inspection
+
+An operator can inspect one explicit Lever application URL without filling,
+uploading, or submitting anything:
+
+```powershell
+$env:JOB_AGENT_OPERATOR_TOKEN = $env:SECRET_KEY
+python scripts/lever_dry_run_smoke.py `
+  --url "https://jobs.lever.co/<site>/<posting-uuid>/apply" `
+  --report lever-selector-inspection.json
+```
+
+The command refuses to start unless `DRY_RUN=true`, `DRAFT_ONLY=true`, final
+submission is disabled, the secret is non-default, and the operator token
+matches. Its redacted report records only selector version, bounded field
+types, terminal reason, and whether a form fingerprint was observed. The
+database telemetry row is never marked as a qualification authority. A
+successful inspection therefore does not promote the adapter or authorize a
+live submission; it only proves that the observed URL reached the current
+read-only form contract.
+
 Any selector, payload protocol, form fingerprint, or attachment-proof change
 resets the affected qualification scope. CAPTCHA and MFA pause for manual
 handling. The adapter never extracts browser passwords and never attempts
