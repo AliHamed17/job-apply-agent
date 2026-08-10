@@ -352,52 +352,17 @@ as the original task list:
   a mapping gap — a populated profile resolves them too). `org`/
   `urls_Twitter_`/`urls_Other_` still correctly abstain, for the real
   architecture reason below.
-- [ ] **New, now the actual top blocker for Task 3 — bigger than the hCaptcha
-  finding, and NOT fixed this session, deliberately**: Lever's real Playwright
-  `fill()` (`submitters/lever_playwright.py:1114-1116`) raises on *any*
-  non-`RESOLVED` decision rather than skipping it — confirmed a deliberate,
-  coherent design shared with `submitters/smartrecruiters_playwright.py`
-  (not shared by `greenhouse_playwright.py`/`workday_playwright.py`, which
-  both skip). `LeverBrowserV1.inspect()` and `preflight()` each carry their
-  own independent copy of the matching "any decision not RESOLVED blocks"
-  check. Combined with the second finding above: `org`/`urls_Twitter_`/
-  `urls_Other_` have no canonical concept anywhere in
-  `_CANONICAL_LABEL_ALIASES`, so **nothing can ever resolve them** —not
-  identity, not a pre-seeded `OperatorApprovedAnswer` row (`_operator_approved`
-  *also* requires `canonical_name` to be set before it even queries), not a
-  configured local LLM (`_allowed_llm_evidence_keys` returns empty for a
-  label with no recognized canonical/semantic key, so `_local_llm` bails
-  with `UNSUPPORTED_CLAIM` before generating anything). It's not even
-  possible to represent "reviewed and intentionally left blank" as a
-  workaround: `AnswerDecisionV1`'s own validator forbids a `RESOLVED`
-  decision from carrying a blank string value. **Net effect: under the
-  current domain model, `ready_for_permit` is structurally unreachable for
-  any real Lever posting with even one generic optional field with no
-  identity/CV/LLM-answerable concept — which, based on the one real capture,
-  is ordinary, not an edge case** ("Current company" is exactly this kind of
-  field on most real job applications). Fixing this for real needs a design
-  decision in shared, safety-critical code (`core/submission_domain.py`/
-  `core/form_planning.py`, used by all five adapters, not just Lever) —
-  most plausibly a new disposition distinct from both `RESOLVED` and
-  today's abstain-with-reason, representing "an operator explicitly reviewed
-  and confirmed leaving this exact field blank," matched by
-  `field_contract_fingerprint` (which already exists and already scopes to
-  one exact real field instance) rather than requiring a generic
-  `canonical_name` concept the field may never have. That's a genuine,
-  wide-blast-radius architecture change, not a mechanical fix, and is
-  deliberately left as a scoped-but-undone follow-up rather than guessed at
-  here. The four browser-level tests that need a *ready* plan to exercise
-  their own logic (attachment binding, confirmation-injection resistance,
-  click-timeout handling, invalid-proof detection) now use a test-only
-  `_assume_ready` helper (`tests/test_lever_browser_v1.py`) that synthesizes
-  placeholder-valued `RESOLVED` decisions for whatever's still abstained,
-  clearly documented as standing in for "assume an operator already
-  reviewed this through a mechanism that doesn't exist yet" — proven correct
-  the hard way, by first discovering that clearing only `plan.blockers`
-  produced two tests that passed *for the wrong reason* (coincidentally
-  matching `FORM_CHANGED` from the still-unresolved-decisions check, never
-  reaching the confirmation-injection/proof-validation logic they were
-  named for) before fixing `_assume_ready` to actually clear every decision.
+- [x] **Reviewed optional blanks are now supported safely.** The shared
+  `AnswerDecisionV1` contract already provided the
+  `OPERATOR_CONFIRMED_BLANK` disposition; Lever's browser transport now
+  accepts it only for an exact observed optional, non-sensitive, non-file,
+  non-consent/attestation control with no minimum length. `fill()` leaves that
+  control untouched, and the final-action proof binds the empty value without
+  allowing a checked control, selected option, or non-empty value. Required,
+  sensitive, unknown, and attachment controls still block. The sanitized DOM
+  rehearsal covers the real `org`, Twitter, and Other optional fields and
+  remains non-submitting; custom survey controls and final live qualification
+  are still intentionally out of scope.
 - [x] `ruff check .`, `ruff format --check .` — clean on every touched file.
   Full suite (`pytest tests/ -q`, the reliable run — a first attempt piped
   through `tail -50` before backgrounding and silently discarded the earlier,

@@ -351,6 +351,9 @@ def test_transport_source_has_no_password_store_or_api_fallback() -> None:
 
 def test_release_has_no_await_mutation_or_request_after_final_actionability_recheck() -> None:
     script = lever_transport._FORM_PROOF_SCRIPT
+    assert "operator_confirmed_blank" in script
+    assert "field.required === false" in script
+    assert "selectedOptions.length > 0" in script
     start = script.index("const finalActionability =")
     submit = script.index("form.requestSubmit(submit);", start)
     critical_section = script[start:submit]

@@ -101,17 +101,30 @@ async def test_real_dom_rehearsal_never_submits_or_leaks_request() -> None:
 
         snapshot = await session.snapshot()
         fields = observe_lever_v1_fields(snapshot.html, identity=identity)
+        reviewed_blank_fields = {"org", "urls_Twitter_", "urls_Other_"}
         decisions = tuple(
             AnswerDecisionV1(
                 field_id=field.field_id,
-                disposition=AnswerDisposition.RESOLVED,
-                provenance=(
-                    AnswerProvenance.VERIFIED_ATTACHMENT
-                    if field.field_type is FieldType.FILE
-                    else AnswerProvenance.USER_CONFIRMED
+                disposition=(
+                    AnswerDisposition.OPERATOR_CONFIRMED_BLANK
+                    if field.field_id in reviewed_blank_fields
+                    else AnswerDisposition.RESOLVED
                 ),
-                value=_answer(field),
-                evidence_refs=(f"fixture:{field.field_id}",),
+                provenance=(
+                    AnswerProvenance.OPERATOR_CONFIRMED
+                    if field.field_id in reviewed_blank_fields
+                    else (
+                        AnswerProvenance.VERIFIED_ATTACHMENT
+                        if field.field_type is FieldType.FILE
+                        else AnswerProvenance.USER_CONFIRMED
+                    )
+                ),
+                value=(None if field.field_id in reviewed_blank_fields else _answer(field)),
+                evidence_refs=(
+                    (f"operator_confirmation:{field.field_id}",)
+                    if field.field_id in reviewed_blank_fields
+                    else (f"fixture:{field.field_id}",)
+                ),
             )
             for field in fields
         )
