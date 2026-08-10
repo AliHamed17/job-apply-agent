@@ -36,6 +36,7 @@ from core.submission_domain import (
     FieldType,
     FormFieldV1,
     ReasonCode,
+    field_allows_operator_confirmed_blank,
 )
 from submitters.lever_identity import (
     LeverIdentityError,
@@ -528,7 +529,22 @@ async ({
         const controls = Array.from(wrapper.querySelectorAll("input,textarea,select"))
             .filter(control => (control.getAttribute("type") || "").toLowerCase() !== "hidden");
         const decision = decisionMap.get(field.fieldId);
-        if (!decision || decision.disposition !== "resolved" || decision.value === null) {
+        const operatorConfirmedBlank = decision => (
+            decision
+            && decision.disposition === "operator_confirmed_blank"
+            && decision.value === null
+            && field.required === false
+            && !["file", "consent", "attestation", "unknown"].includes(field.fieldType)
+            && !(field.constraints && Number(field.constraints.minLength || 0) > 0)
+        );
+        if (
+            !decision
+            || (
+                decision.disposition !== "resolved"
+                && !operatorConfirmedBlank(decision)
+            )
+            || (decision.disposition === "resolved" && decision.value === null)
+        ) {
             return {valid: false};
         }
         if (
@@ -584,7 +600,38 @@ async ({
         wrapperFieldIds.set(wrapper, field.fieldId);
         if (owners.has(name)) return {valid: false};
         const expectedValues = [];
-        if (field.fieldType === "file") {
+        if (operatorConfirmedBlank(decision)) {
+            if (field.fieldType === "radio") {
+                if (controls.length < 1 || controls.some(control => control.checked)) {
+                    return {valid: false};
+                }
+            } else {
+                if (controls.length !== 1) return {valid: false};
+                const control = controls[0];
+                const uncheckedCheckbox = (
+                    control instanceof HTMLInputElement
+                    && control.type === "checkbox"
+                    && !control.checked
+                );
+                const emptyMultiSelect = (
+                    control instanceof HTMLSelectElement
+                    && control.multiple
+                    && control.selectedOptions.length === 0
+                );
+                if (
+                    (control instanceof HTMLInputElement
+                        && control.type === "checkbox"
+                        && control.checked)
+                    || (control instanceof HTMLSelectElement && (
+                        (control.multiple && control.selectedOptions.length > 0)
+                        || (!control.multiple && control.value)
+                    ))
+                    || (!uncheckedCheckbox && !emptyMultiSelect
+                        && "value" in control && String(control.value) !== "")
+                ) return {valid: false};
+                if (!uncheckedCheckbox && !emptyMultiSelect) expectedValues.push("");
+            }
+        } else if (field.fieldType === "file") {
             if (
                 controls.length !== 1
                 || !(controls[0] instanceof HTMLInputElement)
@@ -1156,11 +1203,18 @@ class PlaywrightLeverCandidateSession:
             )
         }
         for decision in decisions:
-            if decision.disposition is not AnswerDisposition.RESOLVED:
-                raise LeverAdapterBlockedError(ReasonCode.REQUIRED_FIELD_UNKNOWN)
             field = fields.get(decision.field_id)
             if field is None:
                 raise LeverAdapterBlockedError(ReasonCode.FORM_CHANGED)
+            if decision.disposition is AnswerDisposition.OPERATOR_CONFIRMED_BLANK:
+                if not field_allows_operator_confirmed_blank(field):
+                    raise LeverAdapterBlockedError(ReasonCode.REQUIRED_FIELD_UNKNOWN)
+                # The operator explicitly reviewed this optional field and
+                # chose to leave it blank. Keep the control untouched; the
+                # proof script below still binds its exact observed shape.
+                continue
+            if decision.disposition is not AnswerDisposition.RESOLVED:
+                raise LeverAdapterBlockedError(ReasonCode.REQUIRED_FIELD_UNKNOWN)
             if field.field_type is FieldType.FILE:
                 if decision.value != VERIFIED_ATTACHMENT_SENTINEL:
                     raise LeverAdapterBlockedError(ReasonCode.ATTACHMENT_UNVERIFIED)
