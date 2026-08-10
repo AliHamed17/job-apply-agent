@@ -2401,9 +2401,19 @@ function formConstraintSummary(field) {
     return parts.join(' · ');
 }
 
+function fieldAllowsOperatorBlank(field, partialPlan = false) {
+    const minLength = field.constraints?.min_length;
+    return !partialPlan
+        && field.required !== true
+        && !field.sensitive_category
+        && !['file', 'consent', 'attestation', 'unknown'].includes(field.field_type)
+        && !(Number.isInteger(minLength) && minLength > 0);
+}
+
 function formAnswerControl(field, decision, index, reviewable, partialPlan) {
     const controlId = `form-answer-${index}`;
     const reusableId = `form-reusable-${index}`;
+    const blankId = `form-blank-${index}`;
     const value = decision?.disposition === 'resolved' ? decision.value : null;
     const disabled = reviewable ? '' : ' disabled';
     let control = '';
@@ -2470,9 +2480,15 @@ function formAnswerControl(field, decision, index, reviewable, partialPlan) {
                 ? 'Required for this partial plan: save as a scoped reusable answer'
                 : 'Reuse only for this exact field and form version'}
         </label>`
-        : partialPlan
+            : partialPlan
             ? '<div class="text-sm text-warning">This partial field has no reusable scope. Reinspect after its field mapping is corrected.</div>'
             : '';
+    const blankConfirmation = fieldAllowsOperatorBlank(field, partialPlan)
+        ? `<label class="text-sm text-dim" style="display:flex;gap:7px;align-items:center;">
+            <input id="${blankId}" type="checkbox"${decision?.disposition === 'operator_confirmed_blank' ? ' checked' : ''}${disabled}>
+            Confirm this optional field should remain blank
+        </label>`
+        : '';
     const actionDisabled = !reviewable || (partialPlan && !field.canonical_name)
         ? ' disabled'
         : '';
@@ -2480,9 +2496,10 @@ function formAnswerControl(field, decision, index, reviewable, partialPlan) {
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
             <button type="button" class="btn btn-sm btn-secondary"
                     data-confirm-field-index="${index}"${actionDisabled}>
-                ${decision?.disposition === 'resolved' ? 'Update answer' : 'Confirm answer'}
+                ${decision?.disposition === 'resolved' ? 'Update answer' : decision?.disposition === 'operator_confirmed_blank' ? 'Update blank confirmation' : 'Confirm answer'}
             </button>
             ${reusable}
+            ${blankConfirmation}
         </div>`;
 }
 
@@ -2494,6 +2511,9 @@ function renderFormPlanPanel(appId, plan) {
     const decisionByField = new Map(decisions.map(item => [item.field_id, item]));
     const resolved = fields.filter(
         field => decisionByField.get(field.field_id)?.disposition === 'resolved'
+    ).length;
+    const blankConfirmed = fields.filter(
+        field => decisionByField.get(field.field_id)?.disposition === 'operator_confirmed_blank'
     ).length;
     const unresolvedRequired = fields.filter(
         field => field.required
@@ -2518,6 +2538,8 @@ function renderFormPlanPanel(appId, plan) {
         const constraints = formConstraintSummary(field);
         const status = decision?.disposition === 'resolved'
             ? `Resolved · ${decision.provenance || 'recorded source'}`
+            : decision?.disposition === 'operator_confirmed_blank'
+                ? 'Confirmed blank · operator review'
             : decision?.reason_code || 'Operator review required';
         return `<div class="qa-item" data-form-field-index="${index}">
             <div class="qa-q">
@@ -2558,7 +2580,7 @@ function renderFormPlanPanel(appId, plan) {
         </div>` : ''}
         <div class="qa-item">
             <div class="qa-q">Answers</div>
-            <div class="qa-a">${resolved}/${fields.length} resolved · ${unresolvedRequired} required answers need review</div>
+            <div class="qa-a">${resolved}/${fields.length} resolved · ${blankConfirmed} optional blanks confirmed · ${unresolvedRequired} required answers need review</div>
         </div>
         <div class="qa-item">
             <div class="qa-q">Provenance</div>
@@ -2629,15 +2651,23 @@ async function confirmFormAnswer(appId, plan, index) {
     if (!isCurrentReviewModalRequest(appId, requestToken)) return;
     const field = plan.fields?.[index];
     if (!field) return;
-    let value;
-    try {
-        value = readFormAnswer(field, index);
-    } catch (error) {
-        showToast(error.message, 'warning');
-        return;
-    }
     const partialPlan = (plan.blockers || []).includes('FORM_PLAN_INCOMPLETE');
     const reusableControl = $(`form-reusable-${index}`);
+    const blankControl = $(`form-blank-${index}`);
+    const confirmBlank = blankControl?.checked === true;
+    if (confirmBlank && !fieldAllowsOperatorBlank(field, partialPlan)) {
+        showToast('Only safe optional fields can be explicitly left blank.', 'warning');
+        return;
+    }
+    let value = null;
+    if (!confirmBlank) {
+        try {
+            value = readFormAnswer(field, index);
+        } catch (error) {
+            showToast(error.message, 'warning');
+            return;
+        }
+    }
     if (partialPlan && (!field.canonical_name || reusableControl?.checked !== true)) {
         showToast(
             'Partial plans require a scoped reusable answer, followed by reinspection.',
@@ -2655,6 +2685,7 @@ async function confirmFormAnswer(appId, plan, index) {
             plan_id: plan.plan_id,
             application_revision: plan.application_revision,
             value,
+            confirm_blank: confirmBlank,
             reusable,
             evidence_source: 'operator_confirmation',
             evidence_reference: 'dashboard_review',

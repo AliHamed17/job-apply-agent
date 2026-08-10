@@ -23,7 +23,7 @@ from uuid import uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from api.task_publication import publish_configured_task
@@ -73,6 +73,7 @@ from core.submission_domain import (
     AnswerProvenance,
     FormPlanV1,
     ReasonCode,
+    field_allows_operator_confirmed_blank,
 )
 from core.submission_service import (
     ClientReleaseIdentity,
@@ -358,7 +359,8 @@ class QualificationDryRunResponse(BaseModel):
 class ConfirmAnswerRequest(BaseModel):
     plan_id: str = Field(min_length=36, max_length=36)
     application_revision: PositiveInt
-    value: str | bool | int | float | list[str]
+    value: str | bool | int | float | list[str] | None = None
+    confirm_blank: bool = False
     reusable: bool = False
     evidence_source: Literal["operator_confirmation"] = "operator_confirmation"
     evidence_reference: str = Field(
@@ -374,6 +376,17 @@ class ConfirmAnswerRequest(BaseModel):
         if not normalized:
             raise ValueError("evidence_reference must not be blank")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_blank_confirmation(self) -> ConfirmAnswerRequest:
+        if self.confirm_blank:
+            if self.value is not None:
+                raise ValueError("blank confirmation cannot include an answer value")
+            if self.reusable:
+                raise ValueError("blank confirmation cannot be saved as a reusable answer")
+        elif self.value is None:
+            raise ValueError("an answer value is required unless blank confirmation is explicit")
+        return self
 
 
 _FIELD_LEVEL_ANSWER_BLOCKERS = frozenset(
@@ -1592,22 +1605,34 @@ async def confirm_application_answer(
             detail="Reusable answers require a canonical field identity.",
         )
 
-    # Validate the value against the exact observed control before writing a
-    # reusable row or mutating any review state.
-    preliminary_provenance = (
-        AnswerProvenance.OPERATOR_APPROVED_REUSABLE
-        if body.reusable
-        else AnswerProvenance.USER_CONFIRMED
-    )
+    # Validate the value (or an explicit safe blank) against the exact
+    # observed control before writing a reusable row or mutating review state.
     try:
-        preliminary = AnswerDecisionV1(
-            field_id=field.field_id,
-            disposition=AnswerDisposition.RESOLVED,
-            provenance=preliminary_provenance,
-            value=body.value,
-            confidence=1.0,
-            evidence_refs=(f"{body.evidence_source}:{body.evidence_reference}",),
-        )
+        evidence_ref = f"{body.evidence_source}:{body.evidence_reference}"
+        if body.confirm_blank:
+            if not field_allows_operator_confirmed_blank(field):
+                raise ValueError("operator-confirmed blank is not allowed for this field")
+            preliminary = AnswerDecisionV1(
+                field_id=field.field_id,
+                disposition=AnswerDisposition.OPERATOR_CONFIRMED_BLANK,
+                provenance=AnswerProvenance.OPERATOR_CONFIRMED,
+                confidence=1.0,
+                evidence_refs=(evidence_ref,),
+            )
+        else:
+            preliminary_provenance = (
+                AnswerProvenance.OPERATOR_APPROVED_REUSABLE
+                if body.reusable
+                else AnswerProvenance.USER_CONFIRMED
+            )
+            preliminary = AnswerDecisionV1(
+                field_id=field.field_id,
+                disposition=AnswerDisposition.RESOLVED,
+                provenance=preliminary_provenance,
+                value=body.value,
+                confidence=1.0,
+                evidence_refs=(evidence_ref,),
+            )
         preliminary_decisions = {decision.field_id: decision for decision in domain_plan.decisions}
         preliminary_decisions[field.field_id] = preliminary
         preliminary_blockers = _recompute_answer_blockers(
@@ -1689,20 +1714,26 @@ async def confirm_application_answer(
         db.flush()
 
     new_plan_id = uuid4()
-    provenance = (
-        AnswerProvenance.OPERATOR_APPROVED_REUSABLE
-        if reusable_row is not None
-        else AnswerProvenance.USER_CONFIRMED
-    )
-    evidence_ref = (
-        f"operator-approved-answer:{reusable_row.id}"
-        if reusable_row is not None
-        else f"{body.evidence_source}:{body.evidence_reference}"
-    )
+    if body.confirm_blank:
+        disposition = AnswerDisposition.OPERATOR_CONFIRMED_BLANK
+        provenance = AnswerProvenance.OPERATOR_CONFIRMED
+        evidence_ref = f"{body.evidence_source}:{body.evidence_reference}"
+    else:
+        disposition = AnswerDisposition.RESOLVED
+        provenance = (
+            AnswerProvenance.OPERATOR_APPROVED_REUSABLE
+            if reusable_row is not None
+            else AnswerProvenance.USER_CONFIRMED
+        )
+        evidence_ref = (
+            f"operator-approved-answer:{reusable_row.id}"
+            if reusable_row is not None
+            else f"{body.evidence_source}:{body.evidence_reference}"
+        )
     try:
         replacement = AnswerDecisionV1(
             field_id=field.field_id,
-            disposition=AnswerDisposition.RESOLVED,
+            disposition=disposition,
             provenance=provenance,
             value=body.value,
             confidence=1.0,

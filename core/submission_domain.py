@@ -217,6 +217,7 @@ class AnswerDisposition(StrEnum):
     RESOLVED = "resolved"
     ABSTAINED = "abstained"
     OPERATOR_REQUIRED = "operator_required"
+    OPERATOR_CONFIRMED_BLANK = "operator_confirmed_blank"
 
 
 class AnswerProvenance(StrEnum):
@@ -228,6 +229,7 @@ class AnswerProvenance(StrEnum):
     CV_EVIDENCE = "cv_evidence"
     LOCAL_LLM = "local_llm"
     VERIFIED_ATTACHMENT = "verified_attachment"
+    OPERATOR_CONFIRMED = "operator_confirmed"
     ABSTAINED = "abstained"
 
 
@@ -1117,6 +1119,26 @@ def field_requires_operator_review(field: FormFieldV1) -> bool:
     )
 
 
+def field_allows_operator_confirmed_blank(field: FormFieldV1) -> bool:
+    """Allow only safe optional controls to be explicitly left blank.
+
+    Required, sensitive, consent/attestation, file, and unknown controls stay
+    blocked. This disposition is scoped to the exact observed form field and
+    cannot bypass a legal or submission requirement.
+    """
+
+    if field.required or field_requires_operator_review(field):
+        return False
+    if field.field_type in {
+        FieldType.FILE,
+        FieldType.CONSENT,
+        FieldType.ATTESTATION,
+        FieldType.UNKNOWN,
+    }:
+        return False
+    return field.constraints.min_length in {None, 0}
+
+
 def observed_form_fields_are_bounded(fields: tuple[FormFieldV1, ...]) -> bool:
     """Bound untrusted ATS form observations before any resolver or model call."""
 
@@ -1461,7 +1483,21 @@ class AnswerDecisionV1(_FrozenDomainModel):
 
     @model_validator(mode="after")
     def validate_decision(self) -> AnswerDecisionV1:
-        if self.disposition == AnswerDisposition.RESOLVED:
+        if self.disposition == AnswerDisposition.OPERATOR_CONFIRMED_BLANK:
+            if self.value is not None:
+                raise ValueError("operator-confirmed blank decisions cannot contain an answer")
+            if self.provenance != AnswerProvenance.OPERATOR_CONFIRMED:
+                raise ValueError("operator-confirmed blank decisions require operator provenance")
+            if not self.evidence_refs or any(
+                not reference.startswith("operator_confirmation:")
+                for reference in self.evidence_refs
+            ):
+                raise ValueError(
+                    "operator-confirmed blank decisions require operator evidence references"
+                )
+            if self.reason_code is not None:
+                raise ValueError("operator-confirmed blank decisions cannot carry a blocker")
+        elif self.disposition == AnswerDisposition.RESOLVED:
             if self.value is None:
                 raise ValueError("resolved answers require a value")
             if isinstance(self.value, str) and not self.value.strip():
@@ -1600,6 +1636,12 @@ class FormPlanV1(_FrozenDomainModel):
                 decision.disposition == AnswerDisposition.RESOLVED
                 and decision.provenance == AnswerProvenance.VERIFIED_ATTACHMENT
             )
+            if decision.disposition == AnswerDisposition.OPERATOR_CONFIRMED_BLANK:
+                if not field_allows_operator_confirmed_blank(field):
+                    raise ValueError(
+                        "operator-confirmed blank answers require a safe optional field"
+                    )
+                continue
             explicitly_confirmed = bool(decision.evidence_refs) and all(
                 reference.startswith("operator_confirmation:")
                 for reference in decision.evidence_refs

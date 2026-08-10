@@ -611,7 +611,8 @@ def record_form_decision(
 ) -> bool:
     disposition = getattr(decision, "disposition", None)
     disposition_value = str(getattr(disposition, "value", disposition) or "")
-    reason = "REQUIRED_FIELD_UNKNOWN" if disposition_value != "resolved" else "FORM_PLAN_READY"
+    reviewed = disposition_value in {"resolved", "operator_confirmed_blank"}
+    reason = "FORM_PLAN_READY" if reviewed else "REQUIRED_FIELD_UNKNOWN"
     return record_operational_event(
         db,
         dedup_key=f"form-plan:{plan.plan_id}:{event_kind}:field:{field.field_id}",
