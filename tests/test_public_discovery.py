@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from profile.models import Personal, Preferences, Resume, UserProfile
 
+import httpx
+import pytest
 import yaml
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.config import Settings
 from db.models import Base, UserProfileVersion
-from discovery.public_sources import parse_remotive_jobs
+from discovery.http_client import DiscoveryFetchError, DiscoveryHttpClient
+from discovery.public_sources import fetch_remotive_jobs, parse_remotive_jobs
 from discovery.search_intents import derive_search_intents
 
 
@@ -99,6 +102,19 @@ def test_remotive_filter_uses_every_cv_derived_intent():
     )
 
     assert [job.title for job in jobs] == ["Embedded Engineer"]
+
+
+@pytest.mark.asyncio
+async def test_remotive_transport_rejects_malformed_payload_with_stable_reason():
+    async def handler(request):
+        return httpx.Response(200, content=b"not-json", request=request)
+
+    raw = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = DiscoveryHttpClient(timeout_seconds=2, client=raw)
+    settings = type("Settings", (), {"public_discovery_max_jobs": 10})()
+    with pytest.raises(DiscoveryFetchError, match="SOURCE_PAYLOAD_INVALID"):
+        await fetch_remotive_jobs(None, settings, client=client)
+    await raw.aclose()
 
 
 def test_discovery_profile_prefers_immutable_version_over_edited_yaml(tmp_path):
