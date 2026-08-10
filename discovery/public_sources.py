@@ -9,6 +9,7 @@ import structlog
 from bs4 import BeautifulSoup
 
 from discovery.contracts import SearchIntentV1
+from discovery.http_client import DiscoveryFetchError, DiscoveryHttpClient
 from jobs.models import JobData
 
 logger = structlog.get_logger(__name__)
@@ -90,7 +91,7 @@ def parse_remotive_jobs(
 async def fetch_remotive_jobs(
     profile,
     settings,
-    client: httpx.AsyncClient | None = None,
+    client: httpx.AsyncClient | DiscoveryHttpClient | None = None,
     *,
     intents: tuple[SearchIntentV1, ...] | None = None,
 ):
@@ -99,13 +100,34 @@ async def fetch_remotive_jobs(
     if client is None:
         client = httpx.AsyncClient(timeout=settings.public_discovery_timeout_s)
     try:
-        response = await client.get(
-            REMOTIVE_JOBS_URL,
-            headers={"User-Agent": "JobApplyAgent/0.1 (+local personal job search)"},
-        )
-        response.raise_for_status()
+        if isinstance(client, DiscoveryHttpClient):
+            response = await client.get(
+                REMOTIVE_JOBS_URL,
+                headers={"User-Agent": "JobApplyAgent/0.1 (+local personal job search)"},
+                allowed_hosts=frozenset({"remotive.com"}),
+            )
+        else:
+            response = await client.get(
+                REMOTIVE_JOBS_URL,
+                headers={"User-Agent": "JobApplyAgent/0.1 (+local personal job search)"},
+            )
+        if response.status_code == 304:
+            raise DiscoveryFetchError("SOURCE_UNEXPECTED_NOT_MODIFIED")
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise DiscoveryFetchError(
+                "SOURCE_HTTP_ERROR",
+                status_code=response.status_code,
+            ) from exc
+        try:
+            payload = response.json()
+        except (TypeError, ValueError) as exc:
+            raise DiscoveryFetchError("SOURCE_PAYLOAD_INVALID") from exc
+        if not isinstance(payload, dict):
+            raise DiscoveryFetchError("SOURCE_PAYLOAD_INVALID")
         jobs = parse_remotive_jobs(
-            response.json(),
+            payload,
             profile,
             max(1, settings.public_discovery_max_jobs),
             intents=intents,

@@ -45,7 +45,12 @@ from discovery.generic_sources import fetch_generic_page, require_public_https_u
 from discovery.gmail_alerts import fetch_gmail_alert_page, parse_job_alert_message
 from discovery.http_client import DiscoveryFetchError, DiscoveryHttpClient
 from discovery.locks import reconcile_stale_discovery_runs, try_discovery_lock
-from discovery.mesh import _run_catalog_source, synchronize_discovery_configuration
+from discovery.mesh import (
+    _run_catalog_source,
+    _run_singleton_source,
+    remotive_descriptor,
+    synchronize_discovery_configuration,
+)
 from discovery.persistence import (
     ingest_discovered_postings,
     load_cursor,
@@ -357,6 +362,42 @@ async def test_http_transport_honors_retry_after_then_recovers(monkeypatch):
     assert response.json() == {"ok": True}
     assert calls == 2
     sleep.assert_called_once_with(0.0)
+
+
+async def test_remotive_mesh_uses_bounded_discovery_transport(monkeypatch, tmp_path):
+    """The singleton feed must use the same bounded transport as ATS feeds."""
+
+    engine, factory = _factory(tmp_path, "remotive-transport.db")
+    db = factory()
+    settings = SimpleNamespace(
+        public_discovery_enabled=True,
+        public_discovery_interval_h=6,
+        tasks_always_eager=True,
+        public_discovery_timeout_s=2,
+        discovery_http_max_attempts=2,
+        discovery_http_max_response_bytes=1024,
+    )
+    source = upsert_source_state(db, remotive_descriptor(settings))
+    seen_clients = []
+
+    async def fake_fetch(_profile, _settings, client=None, *, intents=None):
+        seen_clients.append(client)
+        return []
+
+    monkeypatch.setattr("discovery.mesh.fetch_remotive_jobs", fake_fetch)
+    await _run_singleton_source(
+        db,
+        settings=settings,
+        source=source,
+        profile=None,
+        intents=(_intent(),),
+        preparation_ready=False,
+    )
+    db.close()
+    engine.dispose()
+
+    assert len(seen_clients) == 1
+    assert isinstance(seen_clients[0], DiscoveryHttpClient)
 
 
 async def test_http_transport_defers_long_retry_after_to_scheduler(monkeypatch):

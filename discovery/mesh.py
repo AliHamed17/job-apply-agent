@@ -368,7 +368,20 @@ async def _run_singleton_source(
     )
     cursor = load_cursor(db, descriptor, catalog=None)
     if source.source_key == "remotive":
-        jobs = await fetch_remotive_jobs(profile, settings, intents=intents)
+        # Keep the singleton feed on the same bounded, retry-aware transport
+        # as tenant-scoped ATS sources.  This enforces response-size limits,
+        # redirect rejection, host serialization, and Retry-After handling.
+        async with DiscoveryHttpClient(
+            timeout_seconds=settings.public_discovery_timeout_s,
+            max_attempts=settings.discovery_http_max_attempts,
+            max_response_bytes=settings.discovery_http_max_response_bytes,
+        ) as client:
+            jobs = await fetch_remotive_jobs(
+                profile,
+                settings,
+                client=client,
+                intents=intents,
+            )
         page = DiscoveryPage(
             postings=_remotive_postings(jobs, observed_at=datetime.now(UTC)),
             cursor=cursor,

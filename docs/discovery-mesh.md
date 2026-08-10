@@ -12,7 +12,7 @@ application.
 | Lever | Public tenant postings API | 10 minutes + jitter | Site slug and region required |
 | Ashby | Public tenant job-board API | 10 minutes + jitter | Job-board name required |
 | SmartRecruiters | Public tenant postings API | 10 minutes + jitter | Company identifier required |
-| Remotive | Public API | 6 hours + jitter | Existing provider limit is preserved |
+| Remotive | Public API | 6 hours + jitter | Existing provider limit is preserved; bounded transport, retry-after, and payload validation are shared with ATS feeds |
 | Gmail alerts | Local read-only OAuth | 1 minute | Only a dedicated label is read |
 | Generic feed/JSON-LD | Permitted HTTPS source | 10 minutes + jitter | Robots rules and public DNS are mandatory |
 | LinkedIn crawler | Disabled | n/a | Alerts or approved partner access only |
