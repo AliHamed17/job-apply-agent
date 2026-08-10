@@ -554,12 +554,52 @@ def _bounded_float(raw: object) -> float | None:
     return value
 
 
-def _control_type(wrapper: Tag, control: Tag) -> tuple[FieldType, SensitiveCategory | None]:
+_CONSENT_LABEL_RE = re.compile(
+    r"\b(?:consent|privacy\s+(?:notice|policy)|data\s+processing|"
+    r"terms\s+(?:and|&)\s+conditions|terms\s+of\s+service|"
+    r"electronic\s+communications?)\b",
+    re.IGNORECASE,
+)
+_ATTESTATION_LABEL_RE = re.compile(
+    r"\b(?:attest|certif(?:y|ication)|applicant\s+declaration|"
+    r"confirm\b.{0,80}\b(?:accurate|truthful|correct))\b",
+    re.IGNORECASE,
+)
+
+
+def _label_sensitive_category(label: str) -> SensitiveCategory | None:
+    """Classify legal acknowledgement labels without trusting control shape.
+
+    Lever has been observed rendering consent as an ordinary radio group, so
+    ``data-control-kind`` cannot be the only evidence.  These deliberately
+    narrow phrases cover legal/privacy acknowledgements while leaving generic
+    preference questions as their observed control type.
+    """
+
+    normalized = " ".join(label.casefold().split())
+    if _CONSENT_LABEL_RE.search(normalized):
+        return SensitiveCategory.CONSENT
+    if _ATTESTATION_LABEL_RE.search(normalized):
+        return SensitiveCategory.ATTESTATION
+    return None
+
+
+def _control_type(
+    wrapper: Tag,
+    control: Tag,
+    *,
+    label: str,
+) -> tuple[FieldType, SensitiveCategory | None]:
     kind = str(wrapper.get("data-control-kind", "")).strip().casefold()
     if kind == "consent":
         return FieldType.CONSENT, SensitiveCategory.CONSENT
     if kind == "attestation":
         return FieldType.ATTESTATION, SensitiveCategory.ATTESTATION
+    label_category = _label_sensitive_category(label)
+    if label_category is SensitiveCategory.CONSENT:
+        return FieldType.CONSENT, label_category
+    if label_category is SensitiveCategory.ATTESTATION:
+        return FieldType.ATTESTATION, label_category
     if control.name == "textarea":
         return FieldType.TEXTAREA, None
     if control.name == "select":
@@ -636,17 +676,6 @@ def observe_lever_v1_fields(
         if not controls:
             raise LeverAdapterBlockedError(ReasonCode.SELECTOR_DRIFT)
         control = controls[0]
-        field_type, sensitive_category = _control_type(wrapper, control)
-        names = {str(node.get("name", "")).strip() for node in controls}
-        if (
-            "" in names
-            or (field_type is FieldType.RADIO and len(names) != 1)
-            or (field_type is not FieldType.RADIO and len(controls) != 1)
-        ):
-            raise LeverAdapterBlockedError(ReasonCode.SELECTOR_DRIFT)
-        field_id = _field_id_from_name(str(control.get("name", "")).strip())
-        if not _FIELD_ID_RE.fullmatch(field_id) or field_id in seen_ids:
-            raise LeverAdapterBlockedError(ReasonCode.SELECTOR_DRIFT)
         # .application-label is checked first, not folded into the selector
         # list below: real markup wraps each question's actual label text in
         # exactly one such div, sibling to a .application-field div that can
@@ -666,6 +695,21 @@ def observe_lever_v1_fields(
         )
         label = label_node.get_text(" ", strip=True) if label_node is not None else ""
         if not label:
+            raise LeverAdapterBlockedError(ReasonCode.SELECTOR_DRIFT)
+        field_type, sensitive_category = _control_type(wrapper, control, label=label)
+        names = {str(node.get("name", "")).strip() for node in controls}
+        if (
+            "" in names
+            or (field_type is FieldType.RADIO and len(names) != 1)
+            or (field_type in {FieldType.CONSENT, FieldType.ATTESTATION} and len(names) != 1)
+            or (
+                field_type not in {FieldType.RADIO, FieldType.CONSENT, FieldType.ATTESTATION}
+                and len(controls) != 1
+            )
+        ):
+            raise LeverAdapterBlockedError(ReasonCode.SELECTOR_DRIFT)
+        field_id = _field_id_from_name(str(control.get("name", "")).strip())
+        if not _FIELD_ID_RE.fullmatch(field_id) or field_id in seen_ids:
             raise LeverAdapterBlockedError(ReasonCode.SELECTOR_DRIFT)
         accepted = tuple(
             item.strip() for item in str(control.get("accept", "")).split(",") if item.strip()

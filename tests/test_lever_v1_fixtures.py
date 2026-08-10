@@ -184,6 +184,35 @@ def test_exact_options_and_sensitive_consent_semantics_are_observed() -> None:
     assert consent.sensitive_category is SensitiveCategory.CONSENT
 
 
+def test_label_only_consent_radio_is_classified_as_sensitive() -> None:
+    """Consent must remain typed when Lever omits data-control-kind."""
+
+    html = _fixture("application_consent.html").replace(
+        'data-control-kind="consent"',
+        "",
+    )
+    html = html.replace(
+        '<input name="consent" required="" type="checkbox" value="accepted"/>',
+        (
+            '<input data-option-label="Yes, I consent" name="consent" '
+            'required="" type="radio" value="yes"/>'
+            '<input data-option-label="No, I do not consent" name="consent" '
+            'required="" type="radio" value="no"/>'
+        ),
+    )
+
+    consent = next(
+        field
+        for field in observe_lever_v1_fields(html, identity=IDENTITY)
+        if field.field_id == "consent"
+    )
+
+    assert consent.field_type is FieldType.CONSENT
+    assert consent.sensitive_category is SensitiveCategory.CONSENT
+    assert consent.options == ()
+    assert field_requires_operator_review(consent) is True
+
+
 def test_final_action_binding_accounts_for_every_user_and_system_control() -> None:
     html = _fixture("application_basic.html")
     fields = observe_lever_v1_fields(html, identity=IDENTITY)
