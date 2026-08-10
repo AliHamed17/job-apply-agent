@@ -43,12 +43,14 @@ from submitters.lever_identity import (
     parse_lever_posting_identity,
 )
 from submitters.lever_v1 import (
+    _FIELD_WRAPPER_SELECTOR,
     LEVER_FORM_SELECTOR,
     LeverAdapterBlockedError,
     LeverAttachmentProof,
     LeverBrowserSnapshot,
     LeverCandidateSession,
     LeverFinalActionProof,
+    _field_id_from_name,
     observe_lever_v1_fields,
 )
 
@@ -62,7 +64,6 @@ _MAX_FILENAME_BYTES = 512
 _MAX_MEDIA_TYPE_BYTES = 200
 _MAX_ACTIONABILITY_STATE_BYTES = 64 * 1024
 _FORM_DATA_COMMITMENT_VERSION = b"lever-formdata-v1;"
-_SYSTEM_CONTROL_NAMES = frozenset({"authenticity_token", "csrf_token", "_csrf", "utf8"})
 
 
 class LeverFinalActionAmbiguousError(RuntimeError):
@@ -405,17 +406,14 @@ async ({
         return `${encoder.encode(normalized).length}:${normalized}`;
     };
     const forms = Array.from(document.querySelectorAll(
-        'form[data-qa="application-form"][data-posting-id][data-site]'
-    )).filter(visible).filter(form =>
-        (form.getAttribute("data-posting-id") || "").toLowerCase() === identity.postingId
-        && (form.getAttribute("data-site") || "") === identity.site
-    );
+        'form#application-form'
+    )).filter(visible);
     if (forms.length !== 1 || !Array.isArray(fields) || !Array.isArray(decisions)) {
         return {valid: false};
     }
     const form = forms[0];
     const submits = Array.from(form.querySelectorAll(
-        'button[data-qa="btn-submit"][type="submit"]'
+        'button[data-qa="btn-submit"]'
     )).filter(visible);
     if (submits.length !== 1) return {valid: false};
     const submit = submits[0];
@@ -427,14 +425,10 @@ async ({
     ).length === 0;
     const structureValid = () => {
         const currentForms = Array.from(document.querySelectorAll(
-            'form[data-qa="application-form"][data-posting-id][data-site]'
-        )).filter(visible).filter(candidate =>
-            (candidate.getAttribute("data-posting-id") || "").toLowerCase()
-                === identity.postingId
-            && (candidate.getAttribute("data-site") || "") === identity.site
-        );
+            'form#application-form'
+        )).filter(visible);
         const currentSubmits = Array.from(form.querySelectorAll(
-            'button[data-qa="btn-submit"][type="submit"]'
+            'button[data-qa="btn-submit"]'
         )).filter(visible);
         return Boolean(
             currentForms.length === 1
@@ -452,7 +446,11 @@ async ({
             && !submit.hasAttribute("formmethod")
             && !submit.hasAttribute("formenctype")
             && !submit.hasAttribute("name")
-            && form.getAttribute("action") === identity.applyUrl
+            && (
+                !form.hasAttribute("action")
+                || form.getAttribute("action") === ""
+                || form.getAttribute("action") === identity.applyUrl
+            )
             && (form.getAttribute("method") || "").toLowerCase() === "post"
             && (form.getAttribute("enctype") || "").toLowerCase()
                 === "multipart/form-data"
@@ -474,7 +472,7 @@ async ({
         )
     ) return {valid: false};
     const visibleWrappers = Array.from(form.querySelectorAll(
-        '[data-qa="application-field"][data-field-id]'
+        'li.application-question'
     )).filter(visible);
     const decisionMap = new Map(decisions.map(decision => [decision.fieldId, decision]));
     if (
@@ -484,6 +482,7 @@ async ({
         || fields.some(field => !decisionMap.has(field.fieldId))
     ) return {valid: false};
     const compactText = value => String(value || "").trim().replace(/\s+/g, " ");
+    const fieldIdFromName = name => String(name).replace(/[^A-Za-z0-9_.:-]/g, "_");
     const nullableInt = value => {
         if (value === null) return null;
         if (!/^-?\d+$/.test(value)) return Number.NaN;
@@ -514,17 +513,16 @@ async ({
         }[raw] || "text";
     };
     const owners = new Map();
+    const wrapperFieldIds = new Map();
     let resumeControlName = "";
     for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
         const field = fields[fieldIndex];
         const wrapper = visibleWrappers[fieldIndex];
-        if (
-            (wrapper.getAttribute("data-field-id") || "") !== field.fieldId
-            || field.position !== fieldIndex
-            || ((wrapper.getAttribute("data-canonical-name") || null) !== field.canonicalName)
-        ) return {valid: false};
-        const labels = wrapper.querySelectorAll("label,legend,[data-qa='field-label']");
-        if (labels.length < 1 || compactText(labels[0].textContent) !== field.label) {
+        if (field.position !== fieldIndex) return {valid: false};
+        const labelNode = wrapper.querySelector(".application-label")
+            || wrapper.querySelector("label, legend, [data-qa='field-label']");
+        const label = labelNode ? compactText(labelNode.textContent) : "";
+        if (!label || label !== field.label) {
             return {valid: false};
         }
         const controls = Array.from(wrapper.querySelectorAll("input,textarea,select"))
@@ -543,6 +541,11 @@ async ({
                 !== field.required
         ) return {valid: false};
         const control = controls[0];
+        if (fieldIdFromName(control.name) !== field.fieldId) return {valid: false};
+        const declaredCanonical = wrapper.getAttribute("data-canonical-name");
+        if (declaredCanonical !== null && declaredCanonical !== field.canonicalName) {
+            return {valid: false};
+        }
         const constraints = {
             minLength: nullableInt(control.getAttribute("minlength")),
             maxLength: nullableInt(control.getAttribute("maxlength")),
@@ -578,6 +581,7 @@ async ({
         const names = new Set(controls.map(control => control.name));
         if (names.size !== 1) return {valid: false};
         const name = controls[0].name;
+        wrapperFieldIds.set(wrapper, field.fieldId);
         if (owners.has(name)) return {valid: false};
         const expectedValues = [];
         if (field.fieldType === "file") {
@@ -629,18 +633,34 @@ async ({
         owners.set(name, {expectedValues, index: 0});
     }
     if (!resumeControlName) return {valid: false};
-    const allowedSystem = new Set(["authenticity_token", "csrf_token", "_csrf", "utf8"]);
+    const allowedSystem = new Set([
+        "accountId", "linkedInData", "origin", "referer", "timezone",
+        "socialReferralKey", "socialSource", "resumeStorageId",
+        "h-captcha-response", "source"
+    ]);
     const seenSystem = new Set();
+    const companionNames = new Set();
     const allNamed = Array.from(form.elements).filter(control => control.name);
     for (const control of allNamed) {
         if (owners.has(control.name)) continue;
+        const owningWrapper = control.closest("li.application-question");
+        if (
+            owningWrapper
+            && wrapperFieldIds.has(owningWrapper)
+            && control instanceof HTMLInputElement
+            && control.type === "hidden"
+            && !control.disabled
+        ) {
+            if (companionNames.has(control.name)) return {valid: false};
+            companionNames.add(control.name);
+            continue;
+        }
         if (
             !allowedSystem.has(control.name)
             || seenSystem.has(control.name)
             || !(control instanceof HTMLInputElement)
             || control.type !== "hidden"
             || control.disabled
-            || control.value.length < 1
             || encoder.encode(control.value).length > 4096
         ) return {valid: false};
         seenSystem.add(control.name);
@@ -682,7 +702,7 @@ async ({
                     !== (expected.type || "application/octet-stream").toLowerCase()
             ) return {valid: false};
         } else if (
-            !seenSystem.has(name)
+            !(seenSystem.has(name) || companionNames.has(name))
             || typeof value !== "string"
         ) return {valid: false};
         if (typeof value === "string") {
@@ -733,7 +753,7 @@ async ({
         payloadDigest: await sha(material),
         identityDigest: await sha(`${identity.hostname}/${identity.site}/${identity.postingId}`),
         actionDigest: await sha(identity.applyUrl),
-        submitterDigest: await sha("button:data-qa=btn-submit:type=submit"),
+        submitterDigest: await sha("button:data-qa=btn-submit:type=button"),
         actionabilityDigest: immediateActionabilityDigest,
         resumeControlDigest: await sha(resumeControlName),
         formFingerprint,
@@ -827,6 +847,35 @@ class PlaywrightLeverCandidateSession:
         if self._page is None:
             raise LeverAdapterBlockedError(ReasonCode.RUNTIME_NOT_READY)
         return self._page
+
+    async def _field_wrapper(self, field_id: str) -> Any | None:
+        """Find a real Lever question wrapper by its control-name field id.
+
+        Lever does not expose the old ``data-field-id`` wrapper attribute.
+        The v5 observer derives the stable field id from the primary control's
+        ``name``; the browser transport must use the same rule or it will
+        reject every real field as selector drift.
+        """
+
+        page = self._require_page()
+        wrappers = page.locator(f"{LEVER_FORM_SELECTOR} {_FIELD_WRAPPER_SELECTOR}")
+        matches: list[Any] = []
+        for index in range(await wrappers.count()):
+            wrapper = wrappers.nth(index)
+            controls = wrapper.locator("input, textarea, select")
+            names: list[str] = []
+            for control_index in range(await controls.count()):
+                control = controls.nth(control_index)
+                if (await control.get_attribute("type") or "").casefold() == "hidden":
+                    continue
+                name = (await control.get_attribute("name") or "").strip()
+                if name:
+                    names.append(_field_id_from_name(name))
+            if field_id in names:
+                matches.append(wrapper)
+        if len(matches) > 1:
+            raise LeverAdapterBlockedError(ReasonCode.FORM_CHANGED)
+        return matches[0] if matches else None
 
     async def navigate(self, url: str) -> None:
         if self._page is not None:
@@ -994,11 +1043,9 @@ class PlaywrightLeverCandidateSession:
         return await page.evaluate(
             r"""
             async () => {
-                const wrappers = Array.from(document.querySelectorAll(
-                    '[data-qa="application-field"][data-field-id]'
-                )).filter(wrapper => wrapper.getAttribute("data-canonical-name") === "resume");
-                if (wrappers.length !== 1) return null;
-                const inputs = wrappers[0].querySelectorAll('input[type="file"][name]');
+                const inputs = Array.from(document.querySelectorAll(
+                    'form#application-form li.application-question input[type="file"][name]'
+                ));
                 if (inputs.length !== 1 || inputs[0].files.length !== 1) return null;
                 const input = inputs[0];
                 const file = input.files[0];
@@ -1035,9 +1082,7 @@ class PlaywrightLeverCandidateSession:
         upload_digest = hashlib.sha256(token_bytes(32) + bytes.fromhex(expected_sha256)).hexdigest()
         upload_name = f"resume-{upload_digest[:24]}.{extension}"
         inputs = page.locator(
-            f"{LEVER_FORM_SELECTOR} "
-            '[data-qa="application-field"][data-canonical-name="resume"] '
-            'input[type="file"][name]'
+            f'{LEVER_FORM_SELECTOR} {_FIELD_WRAPPER_SELECTOR} input[type="file"][name]'
         )
         if await inputs.count() != 1:
             raise LeverAdapterBlockedError(ReasonCode.ATTACHMENT_UNVERIFIED)
@@ -1100,7 +1145,6 @@ class PlaywrightLeverCandidateSession:
         return proof
 
     async def fill(self, decisions: tuple[AnswerDecisionV1, ...]) -> None:
-        page = self._require_page()
         identity = self._identity
         if identity is None:
             raise LeverAdapterBlockedError(ReasonCode.RUNTIME_NOT_READY)
@@ -1121,11 +1165,8 @@ class PlaywrightLeverCandidateSession:
                 if decision.value != VERIFIED_ATTACHMENT_SENTINEL:
                     raise LeverAdapterBlockedError(ReasonCode.ATTACHMENT_UNVERIFIED)
                 continue
-            wrapper = page.locator(
-                f"{LEVER_FORM_SELECTOR} "
-                f'[data-qa="application-field"][data-field-id="{field.field_id}"]'
-            )
-            if await wrapper.count() != 1:
+            wrapper = await self._field_wrapper(field.field_id)
+            if wrapper is None:
                 raise LeverAdapterBlockedError(ReasonCode.FORM_CHANGED)
             controls = wrapper.locator("input:not([type=hidden]), textarea, select")
             value = decision.value

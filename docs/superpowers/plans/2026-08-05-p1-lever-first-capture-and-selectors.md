@@ -576,6 +576,13 @@ retracts the specific "needs a new domain-model concept" claim for the
 
 ### Task 2d: the real remaining blocker for Task 3 — `lever_playwright.py` was never rewritten (2026-08-09, found investigating the fix above)
 
+**Status update (2026-08-10): resolved in `codex/lever-playwright-v2`.** The
+Playwright transport now reuses the evidence-backed v5 wrapper, field-id,
+system-control, upload, form, and submit-button contract. A sanitized
+Chromium rehearsal exercises the real DOM with `requestSubmit` stubbed and
+asserts that no POST leaves the browser. This does not qualify a live ATS
+scope; the real-URL dry run and canary remain mandatory.
+
 **This is now the single most significant open finding in this document.**
 Every fix this session — v2→v5, the fixture backlog, the `ready_for_permit`
 correction above — touched only `submitters/lever_v1.py` (pure HTML parsing
@@ -656,12 +663,14 @@ than done blind and then discovered wrong at that step anyway.
    mechanism gap (Task 2b) is still open and still needs real
    label-text-matching work in `core/form_planning.py`'s answer policy —
    that part of the old item 5 stands.
-5b. **The real top priority for Task 3 now**: rebuild
+5b. ~~**The real top priority for Task 3 now**: rebuild
    `submitters/lever_playwright.py` from the same real evidence
    `lever_v1.py` was rewritten from — see Task 2d above for the full list
    of stale locations. Needs a real-Chromium rehearsal to verify, not just
    unit tests; likely the right way to sequence this is to treat it as part
-   of Task 3's own second step rather than a separate pre-step.
+   of Task 3's own second step rather than a separate pre-step.~~ — done
+   2026-08-10; the sanitized rehearsal is committed in
+   `tests/test_lever_playwright_dom_rehearsal.py`.
 6. Re-earn `scripts/evaluate_v4_local_model_qualification.py`'s committed
    report (`test_v4_local_model_qualification.py::test_committed_local_model_report_is_aggregate_only`
    fails on source-integrity, not logic — see above): unrelated to Lever, a
@@ -674,17 +683,16 @@ than done blind and then discovered wrong at that step anyway.
 
 Unchanged from the design spec's existing ladder (§2 qualification stages) —
 not rewritten here because nothing learned this session changes the ladder
-itself, only what has to happen before Task 3 can start. As of 2026-08-09:
-the hCaptcha false-positive, the fixture backlog, and the `ready_for_permit`
-over-blocking bug are all fixed (Tasks 2, 2b, 2c above) — `lever_v1.py`'s
-offline logic now honestly reaches a ready plan on the real fixture. The
-real, structural blocker is Task 2d: `submitters/lever_playwright.py`, the
-actual browser driver, was never rewritten from v2 assumptions and would
-fail immediately against a real page regardless of how ready the plan is.
+itself, only what has to happen before Task 3 can start. As of 2026-08-10:
+the hCaptcha false-positive, the fixture backlog, the `ready_for_permit`
+over-blocking bug, and the stale Playwright transport contract are fixed
+(Tasks 2, 2b, 2c, and 2d above). The remaining gates are deliberately
+operator-present: a different real-URL dry run, then one explicitly approved
+live canary with manual CAPTCHA/MFA handling.
 
 - [x] Offline fixture suite passes against the rewritten contract.
-- [ ] `submitters/lever_playwright.py` rebuilt from real evidence (Task 2d).
-- [ ] Real-Chromium rehearsal with `HTMLFormElement.prototype.submit` stubbed —
+- [x] `submitters/lever_playwright.py` rebuilt from real evidence (Task 2d).
+- [x] Real-Chromium rehearsal with `HTMLFormElement.prototype.submit` stubbed —
   confirms no request leaves before spending a real application on it. Also
   the natural point to verify Task 2d's rewrite against a real page.
 - [ ] One real-URL dry run (`DRY_RUN=true`) against a **different** real Lever
