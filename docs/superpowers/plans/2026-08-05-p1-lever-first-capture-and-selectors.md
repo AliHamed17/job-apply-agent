@@ -427,6 +427,16 @@ as the original task list:
 
 ### Task 2b: the 24-fixture backlog cleared, Lever re-promoted to FIXTURE_QUALIFIED (2026-08-09)
 
+**Status update (2026-08-10): the label-only consent gap is resolved in
+`codex/lever-consent-semantics`.** Lever observation now recognizes narrowly
+bounded privacy/consent and attestation label phrases even when the control is
+an ordinary radio or checkbox and `data-control-kind` is absent. The observed
+field is typed as `CONSENT`/`ATTESTATION` and still requires operator review.
+Because the existing executor accepts only boolean checkbox controls for these
+types, a label-only radio is deliberately quarantined rather than guessed or
+submitted. A sanitized label-only radio regression covers the previously
+missing path; generic preference labels remain ordinary controls.
+
 Follow-up items 1 and 2 from the prior pass, done in one sweep the same day:
 
 - [x] All 24 remaining `tests/fixtures/lever_v1/*.html` fixtures migrated or
@@ -463,12 +473,13 @@ Follow-up items 1 and 2 from the prior pass, done in one sweep the same day:
     is the weakest of the three on purpose, documented as such: blank-form
     recon found real consent questions are structurally ordinary radio
     questions, not a `data-control-kind="consent"`-bearing control, meaning
-    `_control_type()`'s only detection mechanism likely doesn't match real
-    Lever markup at all — a live, safety-relevant gap (a real consent
-    question could be misread as an ordinary field and skip the mandatory
-    operator-review path `SensitiveCategory.CONSENT` exists for), not just
-    an untested scenario. Not redesigned here — explicitly out of scope,
-    same as before (touches `core/form_planning.py`'s answer policy).
+    `_control_type()`'s only detection mechanism likely didn't match real
+    Lever markup at all — a live, safety-relevant gap. The follow-up now adds
+    bounded label semantics in the Lever observer, so a label-only consent
+    question is typed as `CONSENT` and cannot skip the mandatory
+    operator-review path. The fixture remains hypothetical; the code change
+    is covered by a sanitized label-only regression and does not claim a live
+    ATS scope.
   - **Also migrated, found along the way**: `prompt_injection.html` was
     completely unreferenced by any test (confirmed by grep) despite being a
     committed fixture — migrated to real markup and given an actual test
@@ -568,10 +579,9 @@ not just unused — those tests now exercise the real, unmodified `inspect()`
 decision workaround. Full Lever-adjacent suite re-run after: still 98
 passed, 0 failed.
 
-`application_consent.html`'s detection-mechanism gap is **not** resolved by
-this correction — that one is real, independent, and still needs the same
-label-text-matching redesign described in Task 2b; this section only
-retracts the specific "needs a new domain-model concept" claim for the
+`application_consent.html`'s detection-mechanism gap is resolved separately in
+the follow-up noted under Task 2b; this section only retracts the specific
+"needs a new domain-model concept" claim for the
 `org`/`urls_Twitter_`/`urls_Other_` case.
 
 ### Task 2d: the real remaining blocker for Task 3 — `lever_playwright.py` was never rewritten (2026-08-09, found investigating the fix above)
@@ -659,10 +669,9 @@ than done blind and then discovered wrong at that step anyway.
    DOM-content-based, which is already the current design.
 5. ~~Design "operator reviewed and confirmed leaving blank" in shared
    domain code~~ — retracted, see Task 2c: the real bug was narrower and
-   Lever-local, and is fixed. `application_consent.html`'s detection-
-   mechanism gap (Task 2b) is still open and still needs real
-   label-text-matching work in `core/form_planning.py`'s answer policy —
-   that part of the old item 5 stands.
+   Lever-local, and is fixed. The `application_consent.html` detection-
+   mechanism gap is handled by the bounded label-only semantic
+   classification noted in Task 2b (2026-08-10).
 5b. ~~**The real top priority for Task 3 now**: rebuild
    `submitters/lever_playwright.py` from the same real evidence
    `lever_v1.py` was rewritten from — see Task 2d above for the full list
