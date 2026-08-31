@@ -1,6 +1,7 @@
 import pytest
-from llm.client import LLMClient
+
 from ingestion.text_post_parser import looks_like_job, parse_text_post
+from llm.client import LLMClient
 
 
 def test_prefilter():
@@ -9,11 +10,18 @@ def test_prefilter():
 
 
 class _LLM(LLMClient):
-    async def generate(self, *a, **k): return ""
+    async def generate(self, *a, **k):
+        return ""
+
     async def generate_json(self, *a, **k):
-        return {"is_job": True, "title": "RF Engineer", "company": "TelcoX",
-                "description": "5G RF role", "contact_phone": "+971500000000",
-                "contact_email": "hr@telcox.com"}
+        return {
+            "is_job": True,
+            "title": "RF Engineer",
+            "company": "TelcoX",
+            "description": "5G RF role",
+            "contact_phone": "+971500000000",
+            "contact_email": "hr@telcox.com",
+        }
 
 
 @pytest.mark.asyncio
@@ -27,7 +35,42 @@ async def test_parse_extracts_contact():
 @pytest.mark.asyncio
 async def test_prefilter_short_circuits_non_jobs():
     class _Boom(LLMClient):
-        async def generate(self, *a, **k): raise AssertionError("no LLM")
-        async def generate_json(self, *a, **k): raise AssertionError("no LLM")
+        async def generate(self, *a, **k):
+            raise AssertionError("no LLM")
+
+        async def generate_json(self, *a, **k):
+            raise AssertionError("no LLM")
+
     r = await parse_text_post("happy friday!", client=_Boom())
     assert r.is_job is False
+
+
+@pytest.mark.asyncio
+async def test_malformed_provider_object_is_treated_as_unclassified():
+    class _Malformed(LLMClient):
+        async def generate(self, *a, **k):
+            return ""
+
+        async def generate_json(self, *a, **k):
+            return ["not", "an", "object"]
+
+    result = await parse_text_post("Hiring an engineer", client=_Malformed())
+    assert result.is_job is False
+
+
+@pytest.mark.asyncio
+async def test_malformed_job_fields_never_reach_outbound_pipeline():
+    class _Malformed(LLMClient):
+        async def generate(self, *a, **k):
+            return ""
+
+        async def generate_json(self, *a, **k):
+            return {
+                "is_job": True,
+                "title": ["pretend this is text"],
+                "company": "Example",
+                "description": "A real description",
+            }
+
+    result = await parse_text_post("Hiring an engineer", client=_Malformed())
+    assert result.is_job is False

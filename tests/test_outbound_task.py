@@ -87,6 +87,112 @@ async def test_whatsapp_outbound_requires_submit_permit(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_text_job_is_persisted_for_dashboard_before_external_send_gate():
+    """A WhatsApp text post must remain visible even when sending is blocked."""
+    from db.models import Job, JobStatus
+    from worker import outbound
+
+    async def fake_parse(text, client=None):
+        return outbound.ParsedPost(
+            is_job=True,
+            title="Machine Learning Engineer",
+            company="Example AI",
+            description="Build production Python and PyTorch systems.",
+            contact_phone="+972500000123",
+            contact_email="",
+        )
+
+    deps = SimpleNamespace(
+        parse=fake_parse,
+        bridge=None,
+        email=None,
+        gen_msg=_gen,
+        now=datetime(2026, 7, 20, 12, 0, 0),
+    )
+    profile = UserProfile()
+    profile.preferences.roles = ["Machine Learning Engineer"]
+    profile.preferences.keywords = ["python", "pytorch"]
+    profile.preferences.locations = ["Israel"]
+
+    class _Gov:
+        def can_act(self):
+            return (True, "ok")
+
+        def wa_remaining(self):
+            return 5
+
+    db = _fake_db()
+    result = await outbound.process_text_post(
+        "Hiring Machine Learning Engineer — DM me",
+        db=db,
+        settings=_settings(draft_only=True),
+        profile=profile,
+        governor=_Gov(),
+        deps=deps,
+        sender="+972500000123",
+    )
+
+    assert result == "draft_only"
+    jobs = db.query(Job).all()
+    assert len(jobs) == 1
+    assert jobs[0].title == "Machine Learning Engineer"
+    assert jobs[0].discovery_source == "whatsapp_text"
+    assert jobs[0].status == JobStatus.SCORED
+    assert jobs[0].apply_url == ""
+
+
+@pytest.mark.asyncio
+async def test_duplicate_text_job_is_not_inserted_twice():
+    from db.models import Job
+    from worker import outbound
+
+    async def fake_parse(text, client=None):
+        return outbound.ParsedPost(
+            is_job=True,
+            title="Data Engineer",
+            company="Example Data",
+            description="Python and SQL",
+            contact_phone="+972500000124",
+        )
+
+    deps = SimpleNamespace(
+        parse=fake_parse,
+        bridge=None,
+        email=None,
+        gen_msg=_gen,
+        now=datetime(2026, 7, 20, 12, 0, 0),
+    )
+    profile = UserProfile()
+    profile.preferences.roles = ["Data Engineer"]
+    profile.preferences.locations = ["Israel"]
+
+    class _Gov:
+        def can_act(self):
+            return (True, "ok")
+
+        def wa_remaining(self):
+            return 5
+
+    db = _fake_db()
+    settings = _settings(draft_only=True)
+    for _ in range(2):
+        assert (
+            await outbound.process_text_post(
+                "Hiring Data Engineer",
+                db=db,
+                settings=settings,
+                profile=profile,
+                governor=_Gov(),
+                deps=deps,
+                sender="+972500000124",
+            )
+            == "draft_only"
+        )
+
+    assert db.query(Job).count() == 1
+
+
+@pytest.mark.asyncio
 async def test_sender_fallback_still_requires_submit_permit():
     """A "DM me" post with no phone/email in the body must reply to the
     poster's own WhatsApp number (passed as `sender`), not return no_contact."""

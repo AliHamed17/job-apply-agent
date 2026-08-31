@@ -9,7 +9,8 @@ from __future__ import annotations
 import signal
 import threading
 from profile.loader import get_profile
-from profile.readiness import profile_readiness_issues
+from profile.models import UserProfile
+from profile.readiness import profile_discovery_readiness_issues
 
 import structlog
 
@@ -22,9 +23,23 @@ _stop = threading.Event()
 
 def validate_safe_mode(settings: Settings) -> None:
     if not settings.dry_run or not settings.draft_only:
-        raise RuntimeError(
-            "Safe automation requires DRY_RUN=true and DRAFT_ONLY=true"
-        )
+        raise RuntimeError("Safe automation requires DRY_RUN=true and DRAFT_ONLY=true")
+
+
+def validate_discovery_profile(profile: UserProfile) -> None:
+    """Require only the profile facts needed to discover jobs.
+
+    Discovery is intentionally independent from candidate identity.  Reusing
+    the full preparation readiness check here made the local runner refuse to
+    start until a name, email, phone, legal facts, and resume had been
+    onboarded—even though discovery itself never sends anything employer
+    facing.  Preparation and submission keep their stricter gates in the API
+    and worker paths.
+    """
+
+    issues = profile_discovery_readiness_issues(profile)
+    if issues:
+        raise RuntimeError("Profile is not ready for discovery: " + ", ".join(issues))
 
 
 def _request_stop(_signum, _frame) -> None:
@@ -34,11 +49,7 @@ def _request_stop(_signum, _frame) -> None:
 def main() -> int:
     settings = get_settings()
     validate_safe_mode(settings)
-    readiness_issues = profile_readiness_issues(get_profile())
-    if readiness_issues:
-        raise RuntimeError(
-            "Profile is not ready for automation: " + ", ".join(readiness_issues)
-        )
+    validate_discovery_profile(get_profile())
     signal.signal(signal.SIGINT, _request_stop)
     signal.signal(signal.SIGTERM, _request_stop)
     interval_seconds = max(1, settings.discovery_interval_h) * 3600
