@@ -171,7 +171,6 @@ async def _fetch_browser(url: str, *, profile_dir: str | None = None) -> str:
                 profile_dir,
                 headless=True,
                 viewport={"width": 1280, "height": 800},
-                args=["--disable-blink-features=AutomationControlled"],
             )
             browser = None
             page = context.pages[0] if context.pages else await context.new_page()
