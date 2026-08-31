@@ -81,6 +81,17 @@ const CONFIG = {
     500,
     Math.max(1, parseInt(process.env.ARCHIVE_SCAN_LIMIT || '100', 10) || 100),
   ),
+  // WhatsApp may hydrate archived message windows shortly after the session
+  // reports ready.  A couple of delayed, bounded rescans can pick up that
+  // local cache without requesting unbounded history or keeping message text.
+  archiveRescanDelayMs: Math.min(
+    300000,
+    Math.max(5000, parseInt(process.env.ARCHIVE_RESCAN_DELAY_MS || '30000', 10) || 30000),
+  ),
+  archiveRescanAttempts: Math.min(
+    3,
+    Math.max(0, parseInt(process.env.ARCHIVE_RESCAN_ATTEMPTS || '2', 10) || 0),
+  ),
 };
 
 // ── Known job board hostnames (mirrors ingestion/url_utils.py) ───────────────
@@ -354,6 +365,27 @@ async function scanArchiveGroup(chat) {
   }
 }
 
+function scheduleArchiveRescans() {
+  if (!CONFIG.archiveScanOnStart || CONFIG.archiveRescanAttempts <= 0) return;
+
+  let remaining = CONFIG.archiveRescanAttempts;
+  const rescan = async () => {
+    if (!client.pupPage || remaining <= 0) return;
+    remaining -= 1;
+    try {
+      const chats = await listChatMetadataFallback();
+      const groups = chats.filter(chat => chat.isGroup && shouldWatchGroup(chat));
+      for (const group of groups) await scanArchiveGroup(group);
+      log('info', `Archive cache rescan complete (${groups.length} eligible group(s); ${remaining} remaining).`);
+    } catch (err) {
+      log('warn', `Archive cache rescan skipped: ${err.message}`);
+    }
+    if (remaining > 0) setTimeout(rescan, CONFIG.archiveRescanDelayMs);
+  };
+
+  setTimeout(rescan, CONFIG.archiveRescanDelayMs);
+}
+
 function messageChatId(message) {
   const value = message?.fromMe ? message?.to : message?.from;
   if (typeof value === 'string') return value;
@@ -608,7 +640,23 @@ client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
 });
 
+let readyEventReceived = false;
+let syncFallbackTriggered = false;
+let syncFallbackTimer = null;
+
 client.on('authenticated', () => log('info', 'WhatsApp session authenticated'));
+client.on('loading_screen', (percent, message) => {
+  log('verbose', `WhatsApp sync ${percent}%${message ? ` (${String(message).slice(0, 40)})` : ''}`);
+});
+client.on('change_state', state => log('verbose', `WhatsApp connection state: ${String(state)}`));
+client.once('ready', () => {
+  readyEventReceived = true;
+  if (syncFallbackTimer) {
+    clearInterval(syncFallbackTimer);
+    syncFallbackTimer = null;
+  }
+  log('verbose', 'WhatsApp library ready event received');
+});
 client.on('ready', async () => {
   log('info', '─────────────────────────────────────────────');
   log('info', 'WhatsApp bridge is READY');
@@ -669,6 +717,7 @@ client.on('ready', async () => {
   }
 
   startHeartbeat();
+  scheduleArchiveRescans();
 });
 
 client.on('disconnected', reason => {
@@ -780,7 +829,29 @@ if (!validateAgentUrl()) {
 }
 log('info', 'Starting WhatsApp bridge…');
 startSendServer();
-client.initialize().catch(err => {
+client.initialize().then(() => {
+  // whatsapp-web.js resolves initialize() before the page's asynchronous
+  // `hasSynced` event fires.  On a warm LocalAuth profile that event can be
+  // emitted just before the listener is attached, leaving the bridge stuck
+  // after authentication.  Probe only the boolean connection state and ask
+  // the library to run its own callback once when it is already complete.
+  const probeSyncState = async () => {
+    if (readyEventReceived || syncFallbackTriggered || !client.pupPage) return;
+    try {
+      const synced = await client.pupPage.evaluate(() => Boolean(
+        window.AuthStore?.AppState?.hasSynced
+          && typeof window.onAppStateHasSyncedEvent === 'function',
+      ));
+      if (!synced) return;
+      syncFallbackTriggered = true;
+      await client.pupPage.evaluate(() => window.onAppStateHasSyncedEvent());
+    } catch (error) {
+      log('verbose', `WhatsApp sync probe deferred: ${String(error).slice(0, 120)}`);
+    }
+  };
+  syncFallbackTimer = setInterval(probeSyncState, 1000);
+  probeSyncState();
+}).catch(err => {
   log('error', `Failed to start: ${err?.message || String(err)}`);
   if (err?.stack) log('error', err.stack);
   process.exit(1);

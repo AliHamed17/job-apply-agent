@@ -244,7 +244,11 @@ being reported as a forwarding failure, but it never retries an external action.
 Set `ARCHIVE_SCAN_ON_START=true` (with a bounded `ARCHIVE_SCAN_LIMIT`) to scan
 recent messages from eligible archived groups once at startup; link bodies are
 processed in memory and only deduplicated job-link records are sent to the
-loopback API.
+loopback API. WhatsApp can hydrate archived chat windows shortly after the
+session reports ready, so the bridge also performs two bounded cache rescans by
+default (`ARCHIVE_RESCAN_DELAY_MS=30000`, `ARCHIVE_RESCAN_ATTEMPTS=2`). These
+rescans never request unbounded history or persist unrelated message text;
+set the attempts to `0` if the startup-only behavior is preferred.
 
 For LinkedIn, do not enable scheduled crawling. Use the dedicated Gmail job-alert
 label (local read-only OAuth) or an approved partner feed. For an exact LinkedIn
