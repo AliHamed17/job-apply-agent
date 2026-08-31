@@ -230,11 +230,21 @@ read or stored by this project.
 
 `DIRECT_CHAT_NUMBERS` is an explicit digits-only allowlist; direct chats remain
 ignored when it is empty. Group filtering is controlled independently by
-`WATCH_ALL_GROUPS` and `GROUP_KEYWORDS`. The bridge forwards job metadata and
+`WATCH_ALL_GROUPS`, `WATCH_ARCHIVED_ONLY`, and `GROUP_KEYWORDS`. Set
+`WATCH_ARCHIVED_ONLY=true` when job posts are kept in archived groups; the
+keyword filter still applies unless `WATCH_ALL_GROUPS=true`. The bridge uses a
+known-good WhatsApp Web snapshot by default. If WhatsApp changes its internal
+protocol, pin only a tested `WA_WEB_VERSION` together with its matching
+`WA_WEB_VERSION_REMOTE_PATH`; do not switch to an unqualified live snapshot.
+The bridge forwards job metadata and
 text to `/api/ingest` or `/api/ingest-text`; it does not submit applications or
 send messages unless the separate, disabled outbound-send flag is intentionally
 enabled. A longer `AGENT_REQUEST_TIMEOUT_MS` prevents slow local extraction from
 being reported as a forwarding failure, but it never retries an external action.
+Set `ARCHIVE_SCAN_ON_START=true` (with a bounded `ARCHIVE_SCAN_LIMIT`) to scan
+recent messages from eligible archived groups once at startup; link bodies are
+processed in memory and only deduplicated job-link records are sent to the
+loopback API.
 
 For LinkedIn, do not enable scheduled crawling. Use the dedicated Gmail job-alert
 label (local read-only OAuth) or an approved partner feed. For an exact LinkedIn

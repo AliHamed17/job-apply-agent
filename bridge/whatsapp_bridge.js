@@ -69,6 +69,18 @@ const CONFIG = {
     120000,
     Math.max(5000, parseInt(process.env.AGENT_REQUEST_TIMEOUT_MS || '60000', 10) || 60000),
   ),
+  // Keep the cached WhatsApp Web page configurable. The repository default is
+  // the last known-good snapshot for this adapter; operators may pin another
+  // tested version for a qualification run. Never silently switch to an
+  // unqualified live snapshot in production.
+  waWebVersion: process.env.WA_WEB_VERSION || '',
+  waWebVersionRemotePath: process.env.WA_WEB_VERSION_REMOTE_PATH
+    || 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  archiveScanOnStart: process.env.ARCHIVE_SCAN_ON_START === 'true',
+  archiveScanLimit: Math.min(
+    500,
+    Math.max(1, parseInt(process.env.ARCHIVE_SCAN_LIMIT || '100', 10) || 100),
+  ),
 };
 
 // ── Known job board hostnames (mirrors ingestion/url_utils.py) ───────────────
@@ -184,6 +196,126 @@ function shouldWatchDirectChat(chat) {
   // Direct-message forwarding is deliberately opt-in and allowlisted. An
   // empty list must never turn a personal inbox into an ingestion source.
   return Boolean(number) && CONFIG.directChatNumbers.includes(number);
+}
+
+// WhatsApp Web occasionally rejects one chat while serializing its group
+// metadata. `client.getChats()` uses Promise.all, so that single rejection
+// used to prevent every archived group from being inspected. Keep a small,
+// read-only metadata fallback that never asks WhatsApp for participant data.
+async function listChatMetadataFallback() {
+  if (!client.pupPage) return [];
+  return client.pupPage.evaluate(() => {
+    const models = window.Store?.Chat?.getModelsArray?.() || [];
+    return models.map(chat => {
+      const id = chat?.id?._serialized || '';
+      const name = chat?.formattedTitle || chat?.name || '';
+      const archived = Boolean(
+        chat?.archived || chat?.isArchived || chat?.archive || chat?.__x_isArchived,
+      );
+      const isGroup = Boolean(chat?.isGroup || chat?.groupMetadata || /@g\.us$/.test(id));
+      return { id, name, archived, isGroup };
+    }).filter(chat => chat.id);
+  });
+}
+
+// Fetch only the recent text metadata needed for URL extraction. This avoids
+// the adapter's group-metadata serializer and never returns media, cookies,
+// participant lists, or page content to the Node process.
+async function fetchRawChatMessages(chatId, limit) {
+  if (!client.pupPage || !chatId) return [];
+  return client.pupPage.evaluate(async ({ id, max }) => {
+    const wid = window.Store?.WidFactory?.createWid?.(id);
+    const chat = wid ? window.Store?.Chat?.get?.(wid) : null;
+    if (!chat?.msgs?.getModelsArray) {
+      return { messages: [], cachedCount: 0, loadedCount: 0, loadError: 'CHAT_MESSAGES_UNAVAILABLE' };
+    }
+
+    let messages = chat.msgs.getModelsArray();
+    const cachedCount = messages.length;
+    let loadError = '';
+    try {
+      while (messages.length < max) {
+        const loaded = await window.Store.ConversationMsgs.loadEarlierMsgs(chat, chat.msgs);
+        if (!loaded || !loaded.length) break;
+        messages = [...loaded, ...messages];
+      }
+    } catch (error) {
+      // Some archived conversations refuse historical pagination. The already
+      // cached messages are still safe to inspect.
+      loadError = String(error);
+    }
+
+    const result = messages
+      .filter(message => !message?.isNotification)
+      .sort((a, b) => Number(a?.t || 0) - Number(b?.t || 0))
+      .slice(-max)
+      .map(message => ({
+        body: message?.body || '',
+        quotedBody: message?.quotedMsg?.body || '',
+        from: message?.from || '',
+        author: message?.author || '',
+      }));
+    return { messages: result, cachedCount, loadedCount: messages.length, loadError };
+  }, { id: chatId, max: limit });
+}
+
+async function processArchiveMessage(message, chat) {
+  const fullText = `${message?.body || ''}\n${message?.quotedBody || ''}`.trim();
+  const urls = extractUrls(fullText);
+  const sender = message?.author || message?.from || 'whatsapp-archive';
+  const sourceName = chat?.isGroup
+    ? `group:${chat.name || 'archived'}`
+    : `direct:${chatNumber(chat)}`;
+
+  for (const url of urls) {
+    if (CONFIG.jobUrlOnly && !isJobUrl(url) && !isShortUrl(url)) continue;
+    if (alreadySeen(url)) continue;
+    markSeen(url);
+    await forwardUrl(url, sender, sourceName);
+  }
+
+  if (!urls.length && CONFIG.forwardTextPosts && fullText && looksLikeJobText(fullText)) {
+    const dedupKey = `text:${fullText}`;
+    if (!alreadySeen(dedupKey)) {
+      markSeen(dedupKey);
+      await forwardTextPost(fullText, sender, sourceName);
+    }
+  }
+}
+
+async function scanArchiveGroup(chat) {
+  if (!CONFIG.archiveScanOnStart || !chat?.id) return;
+  try {
+    const scan = await fetchRawChatMessages(chat.id, CONFIG.archiveScanLimit);
+    const messages = Array.isArray(scan) ? scan : (scan.messages || []);
+    for (const message of messages) await processArchiveMessage(message, chat);
+    const diagnostics = Array.isArray(scan)
+      ? ''
+      : ` (cached=${scan.cachedCount}, loaded=${scan.loadedCount}`
+        + `${scan.loadError ? `, pagination=${scan.loadError}` : ''})`;
+    log('info', `Scanned ${messages.length} recent message(s) from one eligible archive group${diagnostics}.`);
+  } catch (err) {
+    log('warn', `Archive group scan skipped: ${err.message}`);
+  }
+}
+
+function messageChatId(message) {
+  const value = message?.fromMe ? message?.to : message?.from;
+  if (typeof value === 'string') return value;
+  return value?._serialized || '';
+}
+
+async function fallbackChatForMessage(message) {
+  const id = messageChatId(message);
+  if (!id) return null;
+  try {
+    const chats = await listChatMetadataFallback();
+    const matched = chats.find(chat => chat.id === id);
+    if (matched) return { ...matched, id: { _serialized: matched.id } };
+  } catch (_) {
+    // The store may still be syncing; the message will be ignored safely.
+  }
+  return null;
 }
 
 // ── Forward URL to Job Agent ──────────────────────────────────────────────────
@@ -394,6 +526,7 @@ function alreadySeen(url) { return seenUrls.has(url); }
 
 // ── WhatsApp client ───────────────────────────────────────────────────────────
 const client = new Client({
+  ...(CONFIG.waWebVersion ? { webVersion: CONFIG.waWebVersion } : {}),
   authStrategy: new LocalAuth({ dataPath: CONFIG.sessionDir }),
   puppeteer: {
     headless: true,
@@ -407,7 +540,7 @@ const client = new Client({
   },
   webVersionCache: {
     type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+    remotePath: CONFIG.waWebVersionRemotePath,
   },
 });
 
@@ -445,9 +578,11 @@ client.on('ready', async () => {
     for (const g of watched) {
       log('info', `  • ${g.name}`);
       // Process last 5 messages from each group on startup
-      const messages = await g.fetchMessages({ limit: 5 });
-      for (const m of messages) {
-        await processMessage(m);
+      if (CONFIG.archiveScanOnStart) {
+        await scanArchiveGroup(g);
+      } else {
+        const messages = await g.fetchMessages({ limit: 5 });
+        for (const m of messages) await processMessage(m);
       }
     }
     if (directChats.length) {
@@ -460,7 +595,22 @@ client.on('ready', async () => {
       }
     }
   } catch (err) {
-    log('warn', `Could not list groups: ${err.message}`);
+    log('warn', `Could not list groups through the normal adapter: ${err.message}`);
+    try {
+      const fallbackChats = await listChatMetadataFallback();
+      const fallbackGroupCount = fallbackChats.filter(c => c.isGroup).length;
+      const fallbackArchivedCount = fallbackChats.filter(c => c.isGroup && c.archived).length;
+      const fallbackGroups = fallbackChats.filter(c => c.isGroup && shouldWatchGroup(c));
+      _watchedGroupCount = fallbackGroups.length;
+      log(
+        'info',
+        `Read-only metadata fallback found ${fallbackGroups.length} eligible group(s)`
+          + ` (${fallbackArchivedCount}/${fallbackGroupCount} marked archived).`,
+      );
+      for (const group of fallbackGroups) await scanArchiveGroup(group);
+    } catch (fallbackError) {
+      log('warn', `Read-only chat metadata fallback unavailable: ${fallbackError.message}`);
+    }
   }
 
   startHeartbeat();
@@ -479,7 +629,20 @@ client.on('disconnected', reason => {
 // ── Main message handler ──────────────────────────────────────────────────────
 async function processMessage(msg) {
   try {
-    const chat = await msg.getChat();
+    let chat;
+    try {
+      chat = await msg.getChat();
+    } catch (err) {
+      // A single broken group serializer must not drop live URL messages from
+      // every other chat. Fall back to the lightweight, read-only metadata
+      // path and continue only when the chat can be identified and passes the
+      // same allowlist/archive filters.
+      chat = await fallbackChatForMessage(msg);
+      if (!chat) {
+        log('warn', `Ignoring message from an unavailable WhatsApp chat (${String(err)}).`);
+        return;
+      }
+    }
 
     // ── Forward CV PDFs sent directly in the owner's 1:1 chat ──────────────
     if (CONFIG.forwardOwnerDocs && !chat.isGroup && msg.hasMedia && msg.type === 'document'
@@ -516,8 +679,8 @@ async function processMessage(msg) {
         const dedupKey = `text:${fullText}`;
         if (!alreadySeen(dedupKey)) {
           markSeen(dedupKey);
-          const contact = await msg.getContact();
-          const sender = contact.number || msg.from;
+          const contact = await msg.getContact().catch(() => null);
+          const sender = contact?.number || msg.author || msg.from;
           const sourceName = isGroup ? `group:${chat.name}` : `direct:${chatNumber(chat)}`;
           log('info', `[${sourceName}] ${sender} → text post`);
           await forwardTextPost(fullText, sender, sourceName);
@@ -526,8 +689,8 @@ async function processMessage(msg) {
       return;
     }
 
-    const contact = await msg.getContact();
-    const sender = contact.number || msg.from;
+    const contact = await msg.getContact().catch(() => null);
+    const sender = contact?.number || msg.author || msg.from;
 
     for (const url of urls) {
       // Filter: only forward job-board URLs if jobUrlOnly is set
@@ -546,7 +709,7 @@ async function processMessage(msg) {
     }
 
   } catch (err) {
-    log('error', `Message handler error: ${err.message}`);
+    log('error', `Message handler error: ${err?.message || String(err)}`);
   }
 }
 
@@ -563,6 +726,7 @@ if (!validateAgentUrl()) {
 log('info', 'Starting WhatsApp bridge…');
 startSendServer();
 client.initialize().catch(err => {
-  log('error', `Failed to start: ${err.message}`);
+  log('error', `Failed to start: ${err?.message || String(err)}`);
+  if (err?.stack) log('error', err.stack);
   process.exit(1);
 });
