@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -28,14 +29,17 @@ _robots_cache: dict[str, RobotFileParser] = {}
 USER_AGENT = "JobApplyAgent/1.0 (+https://github.com/AliHamed17/Job-apply-agent)"
 
 # Domains whose pages are always JS-rendered — skip httpx and go straight to browser
-_BROWSER_ONLY_DOMAINS = frozenset({
-    "comeet.com", "comeet.co",
-    "linkedin.com",
-    "glassdoor.com",
-    "rippling.com",
-    "bamboohr.com",
-    "recruitee.com",
-})
+_BROWSER_ONLY_DOMAINS = frozenset(
+    {
+        "comeet.com",
+        "comeet.co",
+        "linkedin.com",
+        "glassdoor.com",
+        "rippling.com",
+        "bamboohr.com",
+        "recruitee.com",
+    }
+)
 
 
 def _needs_browser_fetch(url: str) -> bool:
@@ -45,6 +49,16 @@ def _needs_browser_fetch(url: str) -> bool:
         return any(host == d or host.endswith("." + d) for d in _BROWSER_ONLY_DOMAINS)
     except Exception:
         return False
+
+
+def _is_linkedin_url(url: str) -> bool:
+    """Return whether a URL belongs to LinkedIn's public host family."""
+
+    try:
+        host = (urlparse(url).hostname or "").lower().rstrip(".")
+    except Exception:
+        return False
+    return host == "linkedin.com" or host.endswith(".linkedin.com")
 
 
 def _check_robots_txt(url: str) -> bool:
@@ -109,28 +123,80 @@ def _do_fetch(url: str, timeout: float = 15.0) -> httpx.Response:
 
 # Common bot-detection indicators
 _BLOCK_INDICATORS = [
-    "captcha", "cf-challenge", "access denied", "blocked",
-    "please verify you are a human", "enable javascript",
+    "captcha",
+    "cf-challenge",
+    "access denied",
+    "blocked",
+    "please verify you are a human",
+    "enable javascript",
 ]
 
+_LINKEDIN_SESSION_MARKERS = (
+    "sign in to linkedin",
+    "sign in | linkedin",
+    "login to linkedin",
+    "join linkedin",
+    "authwall",
+)
 
-async def _fetch_browser(url: str) -> str:
-    """Fetch using Playwright if httpx is blocked."""
+
+def _linkedin_session_required(landed_url: str, html: str) -> bool:
+    """Detect a LinkedIn auth/challenge shell without retaining page content."""
+
+    landed = (landed_url or "").lower()
+    if any(marker in landed for marker in ("/login", "/checkpoint", "/challenge")):
+        return True
+    visible_candidate = (html or "")[:20_000].lower()
+    return any(marker in visible_candidate for marker in _LINKEDIN_SESSION_MARKERS)
+
+
+async def _fetch_browser(url: str, *, profile_dir: str | None = None) -> str:
+    """Fetch using Playwright, optionally with an isolated persistent profile.
+
+    LinkedIn job pages require the operator's already-authenticated session in
+    order to expose the actual posting.  A fresh anonymous context reliably
+    returns a login/checkpoint shell, which used to be recorded as a successful
+    fetch with zero jobs.  The profile is always supplied by the caller; this
+    function never reads credentials or browser password stores.
+    """
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
-        # Use a real-looking browser
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
+        if profile_dir:
+            # The profile is created by the explicit local login command. Do
+            # not silently create an empty profile and report a false fetch.
+            if not Path(profile_dir).is_dir():
+                raise RuntimeError("LINKEDIN_SESSION_REQUIRED")
+            context = await p.chromium.launch_persistent_context(
+                profile_dir,
+                headless=True,
+                viewport={"width": 1280, "height": 800},
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+            browser = None
+            page = context.pages[0] if context.pages else await context.new_page()
+        else:
+            # Non-LinkedIn JS-heavy pages use an ephemeral context.
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/121.0.0.0 Safari/537.36"
+                )
+            )
+            page = await context.new_page()
         try:
-            # Set a long timeout and wait for idle
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await asyncio.sleep(2)  # brief wait for dynamic content
-            return await page.content()
+            await asyncio.sleep(2)
+            html = await page.content()
+            if _is_linkedin_url(url) and _linkedin_session_required(page.url, html):
+                raise RuntimeError("LINKEDIN_SESSION_REQUIRED")
+            return html
         finally:
-            await browser.close()
+            await context.close()
+            if browser is not None:
+                await browser.close()
 
 
 def fetch_page(url: str) -> FetchResult:
@@ -153,15 +219,43 @@ def fetch_page(url: str) -> FetchResult:
     # Polite crawl delay
     time.sleep(settings.polite_crawl_delay_seconds)
 
-    # For known JS-heavy platforms, skip httpx and use browser directly
+    # For known JS-heavy platforms, skip httpx and use browser directly. An
+    # exact LinkedIn URL must use the operator's isolated, manually signed-in
+    # profile; anonymous HTML is not useful evidence and is surfaced as a
+    # stable blocked result instead of a misleading successful empty fetch.
     if _needs_browser_fetch(url):
         logger.info("browser_only_domain", url=url)
+        profile_dir = None
+        if _is_linkedin_url(url):
+            configured_profile = str(settings.linkedin_browser_profile_dir or "").strip()
+            if not configured_profile or not Path(configured_profile).is_dir():
+                logger.warning("linkedin_session_required", url=url)
+                return FetchResult(
+                    url=url,
+                    error="LINKEDIN_SESSION_REQUIRED",
+                    blocked=True,
+                )
+            profile_dir = str(Path(configured_profile))
         try:
-            html = run_async(_fetch_browser(url))
+            html = run_async(_fetch_browser(url, profile_dir=profile_dir))
+            if _is_linkedin_url(url) and _linkedin_session_required(url, html):
+                return FetchResult(
+                    url=url,
+                    error="LINKEDIN_SESSION_REQUIRED",
+                    blocked=True,
+                )
             _page_cache[url] = html
             logger.info("page_fetched_browser", url=url, length=len(html))
-            return FetchResult(url=url, html=html, success=True, status_code=200)
+            return FetchResult(
+                url=url,
+                html=html,
+                success=True,
+                status_code=200,
+            )
         except Exception as e:
+            error = str(e) or type(e).__name__
+            if _is_linkedin_url(url) and "LINKEDIN_SESSION_REQUIRED" in error:
+                return FetchResult(url=url, error="LINKEDIN_SESSION_REQUIRED", blocked=True)
             logger.error("browser_fetch_failed_direct", url=url, error=str(e))
             return FetchResult(url=url, error=str(e))
 
@@ -173,7 +267,7 @@ def fetch_page(url: str) -> FetchResult:
                 html=resp.text,
                 status_code=resp.status_code,
                 success=(200 <= resp.status_code < 300),
-                blocked=(resp.status_code == 403 or resp.status_code == 429)
+                blocked=(resp.status_code == 403 or resp.status_code == 429),
             )
         except Exception as exc:
             logger.warning("initial_fetch_error", url=url, error=str(exc))
@@ -184,7 +278,13 @@ def fetch_page(url: str) -> FetchResult:
             logger.info("fetch_blocked_trying_browser", url=url)
             try:
                 html = run_async(_fetch_browser(url))
-                result = FetchResult(url=url, html=html, success=True, status_code=200, blocked=False)
+                result = FetchResult(
+                    url=url,
+                    html=html,
+                    success=True,
+                    status_code=200,
+                    blocked=False,
+                )
             except Exception as e:
                 logger.error("browser_fetch_failed", url=url, error=str(e))
                 return result
@@ -195,16 +295,32 @@ def fetch_page(url: str) -> FetchResult:
         lower_html = html[:5000].lower()
         for indicator in _BLOCK_INDICATORS:
             if indicator in lower_html:
-                if not result.blocked: # only try browser once if not already blocked
-                    logger.warning("bot_protection_detected_trying_browser", url=url, indicator=indicator)
+                if not result.blocked:  # only try browser once if not already blocked
+                    logger.warning(
+                        "bot_protection_detected_trying_browser",
+                        url=url,
+                        indicator=indicator,
+                    )
                     try:
                         html = run_async(_fetch_browser(url))
                         lower_html = html[:5000].lower()
                     except Exception as e:
-                         logger.error("browser_fetch_failed_after_indicator", url=url, error=str(e))
-                         return FetchResult(url=url, error=f"Bot protection: {indicator}", blocked=True)
+                        logger.error(
+                            "browser_fetch_failed_after_indicator",
+                            url=url,
+                            error=str(e),
+                        )
+                        return FetchResult(
+                            url=url,
+                            error=f"Bot protection: {indicator}",
+                            blocked=True,
+                        )
                 else:
-                    return FetchResult(url=url, error=f"Bot protection: {indicator}", blocked=True)
+                    return FetchResult(
+                        url=url,
+                        error=f"Bot protection: {indicator}",
+                        blocked=True,
+                    )
 
         # Update cache and return
         _page_cache[url] = html

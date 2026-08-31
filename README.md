@@ -198,6 +198,57 @@ the same isolated browser state.
 Every inspection creates an expiring immutable plan. Any form, selector,
 application, CV, profile, session, or build change invalidates its authority.
 
+## WhatsApp and LinkedIn ingestion
+
+The WhatsApp bridge is a local adapter to the local API. When the API is running
+on this PC, set `bridge/.env` to `JOB_AGENT_URL=http://127.0.0.1:8000`; a Vercel
+URL is a redacted control plane and cannot run the private worker, browser, or
+Ollama pipeline. Set `JOB_AGENT_TOKEN` to the local API secret, then enable only
+the sources you intend to use:
+
+```dotenv
+JOB_AGENT_URL=http://127.0.0.1:8000
+JOB_AGENT_TOKEN=<the-local-SECRET_KEY>
+ALLOW_NONLOCAL_AGENT_URL=false
+FORWARD_TEXT_POSTS=true
+FORWARD_DIRECT_MESSAGES=true
+DIRECT_CHAT_NUMBERS=9725XXXXXXXX
+```
+
+Install and run the bridge from the repository (after the local API is ready):
+
+```powershell
+cd bridge
+npm ci
+copy .env.example .env
+npm start
+```
+
+On the first run, scan the QR code shown in the terminal. The session is stored
+under the ignored `bridge/.wwebjs_auth/` directory; no WhatsApp password is
+read or stored by this project.
+
+`DIRECT_CHAT_NUMBERS` is an explicit digits-only allowlist; direct chats remain
+ignored when it is empty. Group filtering is controlled independently by
+`WATCH_ALL_GROUPS` and `GROUP_KEYWORDS`. The bridge forwards job metadata and
+text to `/api/ingest` or `/api/ingest-text`; it does not submit applications or
+send messages unless the separate, disabled outbound-send flag is intentionally
+enabled. A longer `AGENT_REQUEST_TIMEOUT_MS` prevents slow local extraction from
+being reported as a forwarding failure, but it never retries an external action.
+
+For LinkedIn, do not enable scheduled crawling. Use the dedicated Gmail job-alert
+label (local read-only OAuth) or an approved partner feed. For an exact LinkedIn
+URL, create an isolated persistent profile and sign in manually:
+
+```powershell
+python -m discovery.login
+```
+
+Set `LINKEDIN_BROWSER_PROFILE_DIR` to that profile directory. Login, MFA, and
+CAPTCHA are operator steps; a missing/expired session is recorded as
+`LINKEDIN_SESSION_REQUIRED` and the job remains reviewable rather than being
+silently treated as discovered or submitted.
+
 ## Main operator interfaces
 
 The local Windows API leaves `GET /health/live`, `GET /health/ready`, and

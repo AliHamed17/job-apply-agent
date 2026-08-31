@@ -14,9 +14,14 @@ fully offline against fakes + an in-memory DB.
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import structlog
 
+from db.models import Job, JobStatus, Message
 from ingestion.text_post_parser import ParsedPost, looks_like_job  # noqa: F401 (re-exported)
+from ingestion.url_utils import job_signature
 from jobs.models import JobData
 from match.scoring import Action, decide_action, score_job
 from worker.outbound_dedup import can_contact
@@ -24,6 +29,82 @@ from worker.outbound_dedup import can_contact
 logger = structlog.get_logger(__name__)
 
 __all__ = ["ParsedPost", "looks_like_job", "process_text_post"]
+
+
+def _text_post_digest(text: str, sender: str | None) -> str:
+    """Create a stable local identity for one text post without exposing it."""
+
+    value = f"{sender or 'whatsapp-text'}\n{text}".encode()
+    return hashlib.sha256(value).hexdigest()
+
+
+def _persist_text_post_job(
+    db,
+    *,
+    text: str,
+    sender: str | None,
+    job: JobData,
+    score: float,
+    skip_reason: str | None,
+) -> Job:
+    """Persist a parsed text-only post so it cannot disappear at a safety gate.
+
+    Text posts do not have an employer URL, so they are deliberately recorded
+    as scored, non-Easy-Apply jobs.  The existing outbound permit gate still
+    decides whether any recruiter message could be sent.  Repeated bridge
+    delivery is idempotent by the normal job signature and a deterministic
+    local message id; raw text remains in the private database only.
+    """
+
+    signature = job_signature(job.title, job.company, job.location)
+    existing = db.query(Job).filter(Job.job_signature == signature).first()
+    if existing is not None:
+        return existing
+
+    digest = _text_post_digest(text, sender)
+    message = (
+        db.query(Message)
+        .filter(Message.whatsapp_message_id == f"whatsapp-text-{digest[:32]}")
+        .first()
+    )
+    if message is None:
+        message = Message(
+            whatsapp_message_id=f"whatsapp-text-{digest[:32]}",
+            sender_phone=sender or "whatsapp-text",
+            body=text,
+        )
+        db.add(message)
+        db.flush()
+
+    db_job = Job(
+        extracted_url_id=None,
+        title=job.title.strip(),
+        company=job.company.strip(),
+        location=job.location.strip(),
+        employment_type=job.employment_type.strip(),
+        seniority=job.seniority.strip(),
+        description=job.description.strip(),
+        requirements=job.requirements.strip(),
+        apply_url="",
+        source_url="",
+        date_posted=job.date_posted.strip(),
+        keywords=json.dumps(job.keywords),
+        apply_url_hash=None,
+        job_signature=signature,
+        status=JobStatus.SKIPPED if skip_reason else JobStatus.SCORED,
+        score=score,
+        discovery_source="whatsapp_text",
+        easy_apply=False,
+    )
+    db.add(db_job)
+    db.flush()
+    logger.info(
+        "whatsapp_text_job_persisted",
+        job_id=db_job.id,
+        score=round(score, 1),
+        state=db_job.status.value,
+    )
+    return db_job
 
 
 async def process_text_post(text, db, settings, profile, governor, deps, sender=None) -> str:
@@ -48,6 +129,19 @@ async def process_text_post(text, db, settings, profile, governor, deps, sender=
     )
 
     breakdown = score_job(job, profile)
+    # Persist the parsed posting before any governor, contact, draft-only, or
+    # permit decision.  Previously a text-only WhatsApp job was scored and
+    # then discarded at ``DRAFT_ONLY``/``permit_required``, leaving no record
+    # in the dashboard for the operator to review.
+    _persist_text_post_job(
+        db,
+        text=text,
+        sender=sender,
+        job=job,
+        score=breakdown.total,
+        skip_reason=breakdown.skip_reason
+        or ("LOW_SCORE" if breakdown.total < settings.min_apply_score else None),
+    )
     action = decide_action(
         score=breakdown.total,
         auto_apply_enabled=settings.auto_apply,

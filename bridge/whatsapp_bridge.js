@@ -25,6 +25,11 @@
  *   SEND_PORT           — port for the outbound send server (default: 8100)
  *   FORWARD_TEXT_POSTS  — "true" to forward keyword-matching group text posts
  *                         (no URL) to the agent's /api/ingest-text endpoint
+ *   FORWARD_DIRECT_MESSAGES — "true" to process only 1:1 chats listed in
+ *                         DIRECT_CHAT_NUMBERS
+ *   DIRECT_CHAT_NUMBERS — comma-separated phone numbers for opted-in 1:1 chats
+ *   AGENT_REQUEST_TIMEOUT_MS — API forwarding timeout (default: 60000)
+ *   ALLOW_NONLOCAL_AGENT_URL — explicit opt-in for a non-loopback API (default: false)
  */
 
 'use strict';
@@ -42,6 +47,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const CONFIG = {
   agentUrl: (process.env.JOB_AGENT_URL || 'http://localhost:8000').replace(/\/$/, ''),
   agentToken: process.env.JOB_AGENT_TOKEN || '',
+  allowNonLocalAgentUrl: process.env.ALLOW_NONLOCAL_AGENT_URL === 'true',
   watchAllGroups: process.env.WATCH_ALL_GROUPS !== 'false',   // default: watch all
   watchArchivedOnly: process.env.WATCH_ARCHIVED_ONLY === 'true', // take only archived groups
   groupKeywords: (process.env.GROUP_KEYWORDS || 'jobs,hiring,careers,work,job,tech,remote,vacancy,recruitment')
@@ -50,9 +56,19 @@ const CONFIG = {
   sessionDir: process.env.SESSION_DIR || path.join(__dirname, '.wwebjs_auth'),
   logLevel: process.env.LOG_LEVEL || 'info',     // info | verbose | silent
   forwardOwnerDocs: process.env.FORWARD_OWNER_DOCS === 'true', // forward CV PDFs sent in 1:1 chat
+  forwardDirectMessages: process.env.FORWARD_DIRECT_MESSAGES === 'true', // opt-in 1:1 job messages
+  directChatNumbers: (process.env.DIRECT_CHAT_NUMBERS || '')
+    .split(',').map(s => s.replace(/[^\d]/g, '')).filter(Boolean),
   enableSend: process.env.ENABLE_SEND === 'true', // expose local POST /send outbound endpoint
   sendPort: parseInt(process.env.SEND_PORT || '8100', 10),
   forwardTextPosts: process.env.FORWARD_TEXT_POSTS === 'true', // forward keyword text posts (no URL)
+  // URL ingestion can trigger a browser fetch and (in local eager mode) a
+  // bounded extraction chain. Ten seconds made the bridge report a false
+  // failure while the API was still processing the accepted message.
+  agentRequestTimeoutMs: Math.min(
+    120000,
+    Math.max(5000, parseInt(process.env.AGENT_REQUEST_TIMEOUT_MS || '60000', 10) || 60000),
+  ),
 };
 
 // ── Known job board hostnames (mirrors ingestion/url_utils.py) ───────────────
@@ -133,8 +149,45 @@ function shouldWatchGroup(chat) {
   return CONFIG.groupKeywords.some(kw => lower.includes(kw));
 }
 
+function isLoopbackAgentUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return ['localhost', '127.0.0.1', '::1', 'host.docker.internal'].includes(host);
+  } catch {
+    return false;
+  }
+}
+
+function validateAgentUrl() {
+  if (CONFIG.allowNonLocalAgentUrl || isLoopbackAgentUrl(CONFIG.agentUrl)) {
+    return true;
+  }
+  log(
+    'error',
+    `Refusing non-local JOB_AGENT_URL (${CONFIG.agentUrl}). `
+      + 'Point the bridge at http://127.0.0.1:8000; a Vercel URL cannot run the private worker. '
+      + 'Set ALLOW_NONLOCAL_AGENT_URL=true only for an intentionally secured private network.',
+  );
+  return false;
+}
+
+function chatNumber(chat) {
+  const raw = chat?.id?.user || chat?.id?._serialized || '';
+  return String(raw).replace(/[^\d]/g, '');
+}
+
+function shouldWatchDirectChat(chat) {
+  if (!CONFIG.forwardDirectMessages) return false;
+  const number = chatNumber(chat);
+  // Direct-message forwarding is deliberately opt-in and allowlisted. An
+  // empty list must never turn a personal inbox into an ingestion source.
+  return Boolean(number) && CONFIG.directChatNumbers.includes(number);
+}
+
 // ── Forward URL to Job Agent ──────────────────────────────────────────────────
-async function forwardUrl(url, senderPhone, groupName) {
+async function forwardUrl(url, senderPhone, sourceName) {
   const endpoint = `${CONFIG.agentUrl}/api/ingest`;
   const headers = { 'Content-Type': 'application/json' };
   if (CONFIG.agentToken) headers['Authorization'] = `Bearer ${CONFIG.agentToken}`;
@@ -146,9 +199,9 @@ async function forwardUrl(url, senderPhone, groupName) {
       body: JSON.stringify({
         url,
         sender: senderPhone || 'whatsapp-bridge',
-        source: `group:${groupName}`,
+        source: sourceName,
       }),
-      timeout: 10000,
+      timeout: CONFIG.agentRequestTimeoutMs,
     });
 
     if (res.ok) {
@@ -168,7 +221,7 @@ async function forwardUrl(url, senderPhone, groupName) {
 }
 
 // ── Forward a keyword-matching group TEXT post (no URL) to the Job Agent ─────
-async function forwardTextPost(text, senderPhone, groupName) {
+async function forwardTextPost(text, senderPhone, sourceName) {
   const endpoint = `${CONFIG.agentUrl}/api/ingest-text`;
   const headers = { 'Content-Type': 'application/json' };
   if (CONFIG.agentToken) headers['Authorization'] = `Bearer ${CONFIG.agentToken}`;
@@ -180,13 +233,13 @@ async function forwardTextPost(text, senderPhone, groupName) {
       body: JSON.stringify({
         text,
         sender: senderPhone || 'whatsapp-bridge',
-        source: `group:${groupName}`,
+        source: sourceName,
       }),
-      timeout: 10000,
+      timeout: CONFIG.agentRequestTimeoutMs,
     });
 
     if (res.ok) {
-      log('info', `Forwarded text post → [${groupName}]`);
+      log('info', `Forwarded text post → [${sourceName || 'whatsapp'}]`);
       return true;
     } else {
       log('warn', `Agent rejected text post — HTTP ${res.status}`);
@@ -374,6 +427,7 @@ client.on('ready', async () => {
   log('info', `  Agent URL   : ${CONFIG.agentUrl}`);
   log('info', `  Watch all   : ${CONFIG.watchAllGroups}`);
   log('info', `  Archived only: ${CONFIG.watchArchivedOnly}`);
+  log('info', `  Direct chats: ${CONFIG.forwardDirectMessages ? CONFIG.directChatNumbers.length + ' allowlisted' : 'disabled'}`);
   if (!CONFIG.watchAllGroups) {
     log('info', `  Keywords    : ${CONFIG.groupKeywords.join(', ')}`);
   }
@@ -385,6 +439,7 @@ client.on('ready', async () => {
     const chats = await client.getChats();
     const groups = chats.filter(c => c.isGroup);
     const watched = groups.filter(g => shouldWatchGroup(g));
+    const directChats = chats.filter(c => !c.isGroup && shouldWatchDirectChat(c));
     _watchedGroupCount = watched.length;
     log('info', `Monitoring ${watched.length} / ${groups.length} groups:`);
     for (const g of watched) {
@@ -393,6 +448,15 @@ client.on('ready', async () => {
       const messages = await g.fetchMessages({ limit: 5 });
       for (const m of messages) {
         await processMessage(m);
+      }
+    }
+    if (directChats.length) {
+      log('info', `Monitoring ${directChats.length} allowlisted direct chat(s)`);
+      for (const chat of directChats) {
+        const messages = await chat.fetchMessages({ limit: 5 });
+        for (const message of messages) {
+          await processMessage(message);
+        }
       }
     }
   } catch (err) {
@@ -424,11 +488,14 @@ async function processMessage(msg) {
       return;
     }
 
-    // Only process group messages
-    if (!chat.isGroup) return;
-
-    // Check if this group is watched
-    if (!shouldWatchGroup(chat)) {
+    const isGroup = Boolean(chat.isGroup);
+    if (isGroup) {
+      if (!shouldWatchGroup(chat)) return;
+    } else if (!shouldWatchDirectChat(chat)) {
+      // Personal chats are ignored unless an explicit phone allowlist is
+      // configured. This keeps private conversations out of the pipeline by
+      // default while allowing an operator to forward links from a known
+      // self/recruiter chat.
       return;
     }
 
@@ -451,8 +518,9 @@ async function processMessage(msg) {
           markSeen(dedupKey);
           const contact = await msg.getContact();
           const sender = contact.number || msg.from;
-          log('info', `[${chat.name}] ${sender} → text post`);
-          await forwardTextPost(fullText, sender, chat.name);
+          const sourceName = isGroup ? `group:${chat.name}` : `direct:${chatNumber(chat)}`;
+          log('info', `[${sourceName}] ${sender} → text post`);
+          await forwardTextPost(fullText, sender, sourceName);
         }
       }
       return;
@@ -472,8 +540,9 @@ async function processMessage(msg) {
       }
 
       markSeen(url);
-      log('info', `[${chat.name}] ${sender} → ${url.slice(0, 70)}`);
-      await forwardUrl(url, sender, chat.name);
+      const sourceName = isGroup ? `group:${chat.name}` : `direct:${chatNumber(chat)}`;
+      log('info', `[${sourceName}] ${sender} → ${url.slice(0, 70)}`);
+      await forwardUrl(url, sender, sourceName);
     }
 
   } catch (err) {
@@ -488,6 +557,9 @@ process.on('SIGINT', () => { log('info', 'Shutting down…'); stopHeartbeat(); c
 process.on('SIGTERM', () => { log('info', 'Shutting down…'); stopHeartbeat(); client.destroy().then(() => process.exit(0)); });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
+if (!validateAgentUrl()) {
+  process.exit(1);
+}
 log('info', 'Starting WhatsApp bridge…');
 startSendServer();
 client.initialize().catch(err => {
