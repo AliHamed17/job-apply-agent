@@ -231,6 +231,37 @@ async function fetchRawChatMessages(chatId, limit) {
     }
 
     let messages = chat.msgs.getModelsArray();
+    const chatCachedCount = messages.length;
+    let cacheSource = 'chat';
+
+    // Some WhatsApp Web builds keep more history in the global message
+    // collection than in an archived chat's `msgs` window.  Use that
+    // already-cached data as a read-only fallback before attempting the
+    // version-sensitive pagination hook.  This never asks WhatsApp to fetch
+    // new data and never serializes message bodies outside this process.
+    const serializeChatId = value => {
+      if (typeof value === 'string') return value;
+      if (!value || typeof value !== 'object') return '';
+      if (typeof value._serialized === 'string') return value._serialized;
+      const user = typeof value.user === 'string' ? value.user : '';
+      const server = typeof value.server === 'string' ? value.server : '';
+      return user && server ? `${user}@${server}` : '';
+    };
+    const messageBelongsToChat = message => {
+      const candidates = [
+        message?.chatId,
+        message?.id?.remote,
+        message?.from,
+        message?.to,
+      ].map(serializeChatId);
+      return candidates.includes(id);
+    };
+    const globalMessages = window.Store?.Msg?.getModelsArray?.() || [];
+    const globalMatches = globalMessages.filter(messageBelongsToChat);
+    if (globalMatches.length > messages.length) {
+      messages = globalMatches;
+      cacheSource = 'global';
+    }
     const cachedCount = messages.length;
     let loadError = '';
     try {
@@ -245,6 +276,15 @@ async function fetchRawChatMessages(chatId, limit) {
       loadError = String(error);
     }
 
+    const serializeParticipant = value => {
+      if (typeof value === 'string') return value;
+      if (!value || typeof value !== 'object') return '';
+      if (typeof value._serialized === 'string') return value._serialized;
+      const user = typeof value.user === 'string' ? value.user : '';
+      const server = typeof value.server === 'string' ? value.server : '';
+      return user && server ? `${user}@${server}` : '';
+    };
+
     const result = messages
       .filter(message => !message?.isNotification)
       .sort((a, b) => Number(a?.t || 0) - Number(b?.t || 0))
@@ -252,10 +292,22 @@ async function fetchRawChatMessages(chatId, limit) {
       .map(message => ({
         body: message?.body || '',
         quotedBody: message?.quotedMsg?.body || '',
-        from: message?.from || '',
-        author: message?.author || '',
+        // Store models expose `from`/`author` as Wid objects on some
+        // WhatsApp Web builds.  Keep the bridge/API boundary JSON-safe and
+        // bounded instead of forwarding the internal model object (which
+        // FastAPI correctly rejects as a non-string sender with HTTP 422).
+        from: serializeParticipant(message?.from),
+        author: serializeParticipant(message?.author),
       }));
-    return { messages: result, cachedCount, loadedCount: messages.length, loadError };
+    return {
+      messages: result,
+      cachedCount,
+      chatCachedCount,
+      globalCachedCount: globalMatches.length,
+      cacheSource,
+      loadedCount: messages.length,
+      loadError,
+    };
   }, { id: chatId, max: limit });
 }
 
@@ -292,6 +344,9 @@ async function scanArchiveGroup(chat) {
     const diagnostics = Array.isArray(scan)
       ? ''
       : ` (cached=${scan.cachedCount}, loaded=${scan.loadedCount}`
+        + `${scan.chatCachedCount !== undefined ? `, chat=${scan.chatCachedCount}` : ''}`
+        + `${scan.globalCachedCount !== undefined ? `, global=${scan.globalCachedCount}` : ''}`
+        + `${scan.cacheSource ? `, source=${scan.cacheSource}` : ''}`
         + `${scan.loadError ? `, pagination=${scan.loadError}` : ''})`;
     log('info', `Scanned ${messages.length} recent message(s) from one eligible archive group${diagnostics}.`);
   } catch (err) {
