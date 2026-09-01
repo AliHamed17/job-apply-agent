@@ -72,6 +72,8 @@ _ARCHIVE_SCAN_DEFAULTS: dict[str, Any] = {
     "last_pagination_available": None,
 }
 
+_BRIDGE_REGISTRY_KEY = "whatsapp-web"
+
 
 def _bounded_int(value: object, *, maximum: int) -> int:
     try:
@@ -89,6 +91,11 @@ def _safe_timestamp(value: object) -> str | None:
     except ValueError:
         return None
     return value
+
+
+def _sanitize_bridge_id(value: object) -> str:
+    """Keep the in-memory heartbeat registry single-key and non-user-defined."""
+    return _BRIDGE_REGISTRY_KEY
 
 
 def _sanitize_archive_scan(value: object) -> dict[str, Any]:
@@ -760,7 +767,7 @@ async def bridge_heartbeat(request: Request):
         data: dict[str, Any] = await request.json()
     except Exception:
         data = {}
-    bridge_id = str(data.get("id", "default"))
+    bridge_id = _sanitize_bridge_id(data.get("id"))
     groups = _bounded_int(data.get("groups_watched", 0), maximum=10000)
     _bridge_last_seen[bridge_id] = {
         "last_seen": datetime.now(UTC).isoformat(),
@@ -797,6 +804,8 @@ async def bridge_status():
         archive_scan = dict(_ARCHIVE_SCAN_DEFAULTS)
     try:
         last_seen_dt = datetime.fromisoformat(str(last_seen_str))
+        if last_seen_dt.tzinfo is None:
+            last_seen_dt = last_seen_dt.replace(tzinfo=UTC)
         connected = (datetime.now(UTC) - last_seen_dt).total_seconds() < 120
     except (TypeError, ValueError):
         connected = False

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -61,3 +62,24 @@ def test_dashboard_labels_archive_status_as_cache_only() -> None:
     assert "data.groups_watched" in javascript
     assert "hydrated_cache_only" in javascript
     assert "last_pagination_available" in javascript
+
+
+def test_bridge_status_uses_a_fixed_registry_key_and_normalizes_naive_utc() -> None:
+    app = FastAPI()
+    app.include_router(dashboard_route.router, prefix="/api")
+    dashboard_route._bridge_last_seen.clear()
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/bridge/heartbeat",
+        json={"id": "private-payload-that-must-not-become-a-registry-key"},
+    )
+    assert response.status_code == 200
+    assert list(dashboard_route._bridge_last_seen) == ["whatsapp-web"]
+
+    dashboard_route._bridge_last_seen["whatsapp-web"]["last_seen"] = (
+        datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=30)
+    ).isoformat()
+    status = client.get("/api/bridge/status")
+    assert status.status_code == 200
+    assert status.json()["connected"] is True

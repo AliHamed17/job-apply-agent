@@ -254,8 +254,12 @@ links leave the bridge process. A
 cache-only rescan repeats every ten minutes by default
 (`ARCHIVE_RESCAN_INTERVAL_MS=600000`) so messages hydrated later are picked up
 without restarting the bridge; set the interval to `0` to disable periodic
-polling. Historical messages that WhatsApp has not hydrated remain unavailable
-to this read-only integration.
+polling. Intervals below 60 seconds or malformed values fail closed (periodic
+polling is disabled), and an older explicit `ARCHIVE_RESCAN_ATTEMPTS=0` with no
+interval preserves startup-only behavior. Periodic passes read only already
+hydrated cache windows; they never invoke historical pagination. Historical
+messages that WhatsApp has not hydrated remain unavailable to this read-only
+integration.
 
 For LinkedIn, do not enable scheduled crawling. Use the dedicated Gmail job-alert
 label (local read-only OAuth) or an approved partner feed. For an exact LinkedIn

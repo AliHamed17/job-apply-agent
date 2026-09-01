@@ -31,7 +31,7 @@
  *   AGENT_REQUEST_TIMEOUT_MS — API forwarding timeout (default: 60000)
  *   ALLOW_NONLOCAL_AGENT_URL — explicit opt-in for a non-loopback API (default: false)
  *   ARCHIVE_RESCAN_INTERVAL_MS — bounded cache-only archive poll interval
- *                               (default: 600000; zero disables)
+ *                               (default: 600000; minimum: 60000; zero disables)
  */
 
 'use strict';
@@ -43,9 +43,21 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { boundedReasonCode, createArchiveScanScheduler } = require('./archive_scan_scheduler');
+const {
+  archiveRescanIntervalDefault,
+  parseArchiveRescanInterval,
+} = require('./archive_scan_config');
+const { createBoundedDeduper } = require('./archive_dedup');
+const { ARCHIVE_SCAN_MODE, archiveScanAllowsPagination } = require('./archive_scan_modes');
 
 // ── Load config ──────────────────────────────────────────────────────────────
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const archiveRescanAttemptsRaw = process.env.ARCHIVE_RESCAN_ATTEMPTS;
+const archiveRescanIntervalDefaultValue = archiveRescanIntervalDefault({
+  attemptsRaw: archiveRescanAttemptsRaw,
+  intervalRaw: process.env.ARCHIVE_RESCAN_INTERVAL_MS,
+});
 
 const CONFIG = {
   agentUrl: (process.env.JOB_AGENT_URL || 'http://localhost:8000').replace(/\/$/, ''),
@@ -85,8 +97,8 @@ const CONFIG = {
     Math.max(1, parseInt(process.env.ARCHIVE_SCAN_LIMIT || '100', 10) || 100),
   ),
   // WhatsApp may hydrate archived message windows shortly after the session
-  // reports ready.  A couple of delayed, bounded rescans can pick up that
-  // local cache without requesting unbounded history or keeping message text.
+  // reports ready. A couple of delayed, bounded startup rescans can inspect
+  // that local cache; periodic passes below are explicitly cache-only.
   archiveRescanDelayMs: Math.min(
     300000,
     Math.max(5000, parseInt(process.env.ARCHIVE_RESCAN_DELAY_MS || '30000', 10) || 30000),
@@ -97,9 +109,9 @@ const CONFIG = {
   ),
   // Continue checking only hydrated archive caches after the startup passes.
   // Zero disables the periodic pass; no scan ever requests unbounded history.
-  archiveRescanIntervalMs: Math.min(
-    3600000,
-    Math.max(0, parseInt(process.env.ARCHIVE_RESCAN_INTERVAL_MS || '600000', 10) || 0),
+  archiveRescanIntervalMs: parseArchiveRescanInterval(
+    process.env.ARCHIVE_RESCAN_INTERVAL_MS,
+    { defaultValue: archiveRescanIntervalDefaultValue },
   ),
 };
 
@@ -241,9 +253,9 @@ async function listChatMetadataFallback() {
 // Fetch only the recent text metadata needed for URL extraction. This avoids
 // the adapter's group-metadata serializer and never returns media, cookies,
 // participant lists, or page content to the Node process.
-async function fetchRawChatMessages(chatId, limit) {
+async function fetchRawChatMessages(chatId, limit, { allowPagination = true } = {}) {
   if (!client.pupPage || !chatId) return [];
-  return client.pupPage.evaluate(async ({ id, max }) => {
+  return client.pupPage.evaluate(async ({ id, max, allowPagination: shouldPaginate }) => {
     const wid = window.Store?.WidFactory?.createWid?.(id);
     const chat = wid ? window.Store?.Chat?.get?.(wid) : null;
     if (!chat?.msgs?.getModelsArray) {
@@ -284,16 +296,22 @@ async function fetchRawChatMessages(chatId, limit) {
     }
     const cachedCount = messages.length;
     let loadError = '';
-    try {
-      while (messages.length < max) {
-        const loaded = await window.Store.ConversationMsgs.loadEarlierMsgs(chat, chat.msgs);
-        if (!loaded || !loaded.length) break;
-        messages = [...loaded, ...messages];
+    if (shouldPaginate) {
+      try {
+        while (messages.length < max) {
+          const loaded = await window.Store.ConversationMsgs.loadEarlierMsgs(chat, chat.msgs);
+          if (!loaded || !loaded.length) break;
+          messages = [...loaded, ...messages];
+        }
+      } catch (error) {
+        // Some archived conversations refuse historical pagination. The already
+        // cached messages are still safe to inspect.
+        loadError = String(error);
       }
-    } catch (error) {
-      // Some archived conversations refuse historical pagination. The already
-      // cached messages are still safe to inspect.
-      loadError = String(error);
+    } else {
+      // Periodic passes must never request older messages. Keep the limitation
+      // visible so operators do not mistake a cache refresh for full history.
+      loadError = 'HISTORICAL_PAGINATION_UNAVAILABLE';
     }
 
     const serializeParticipant = value => {
@@ -328,7 +346,7 @@ async function fetchRawChatMessages(chatId, limit) {
       loadedCount: messages.length,
       loadError,
     };
-  }, { id: chatId, max: limit });
+  }, { id: chatId, max: limit, allowPagination });
 }
 
 async function processArchiveMessage(message, chat) {
@@ -356,6 +374,7 @@ async function processArchiveMessage(message, chat) {
 }
 
 let _archiveRescanScheduler = null;
+let _archiveSchedulerGeneration = 0;
 let _archiveScanState = {
   enabled: CONFIG.archiveScanOnStart,
   active: false,
@@ -373,27 +392,37 @@ let _archiveScanState = {
 function archiveLoadErrorCode(value) {
   if (!value) return null;
   const text = String(value);
-  if (/waitForChatLoading|loadEarlier|ConversationMsgs/i.test(text)) {
+  if (/HISTORICAL_PAGINATION_UNAVAILABLE|waitForChatLoading|loadEarlier|ConversationMsgs/i.test(text)) {
     return 'HISTORICAL_PAGINATION_UNAVAILABLE';
   }
   return boundedReasonCode('ARCHIVE_HISTORY_LOAD_FAILED');
 }
 
-async function scanArchiveGroup(chat) {
+async function scanArchiveGroup(
+  chat,
+  { mode = ARCHIVE_SCAN_MODE.STARTUP, stateGeneration = null } = {},
+) {
   if (!CONFIG.archiveScanOnStart || !chat?.id) {
     return { messageCount: 0, paginationAvailable: true };
   }
   try {
-    const scan = await fetchRawChatMessages(chat.id, CONFIG.archiveScanLimit);
+    const allowPagination = archiveScanAllowsPagination(mode);
+    const scan = await fetchRawChatMessages(
+      chat.id,
+      CONFIG.archiveScanLimit,
+      { allowPagination },
+    );
     const messages = Array.isArray(scan) ? scan : (scan.messages || []);
     for (const message of messages) await processArchiveMessage(message, chat);
     const errorCode = Array.isArray(scan) ? null : archiveLoadErrorCode(scan.loadError);
-    _archiveScanState = {
-      ..._archiveScanState,
-      lastMessageCount: messages.length,
-      lastErrorCode: errorCode,
-      lastPaginationAvailable: !errorCode,
-    };
+    if (stateGeneration === null || stateGeneration === _archiveSchedulerGeneration) {
+      _archiveScanState = {
+        ..._archiveScanState,
+        lastMessageCount: messages.length,
+        lastErrorCode: errorCode,
+        lastPaginationAvailable: !errorCode,
+      };
+    }
     const diagnostics = Array.isArray(scan)
       ? ''
       : ` (cached=${scan.cachedCount}, loaded=${scan.loadedCount}`
@@ -417,8 +446,22 @@ async function scanArchiveGroup(chat) {
   }
 }
 
+function invalidateArchiveRescans() {
+  _archiveSchedulerGeneration += 1;
+  const scheduler = _archiveRescanScheduler;
+  _archiveRescanScheduler = null;
+  if (scheduler) scheduler.stop();
+  _archiveScanState = {
+    ..._archiveScanState,
+    active: false,
+    running: false,
+    phase: 'idle',
+  };
+}
+
 function scheduleArchiveRescans() {
-  if (_archiveRescanScheduler) _archiveRescanScheduler.stop();
+  invalidateArchiveRescans();
+  const generation = _archiveSchedulerGeneration;
   _archiveRescanScheduler = createArchiveScanScheduler({
     enabled: CONFIG.archiveScanOnStart,
     initialDelayMs: CONFIG.archiveRescanDelayMs,
@@ -430,9 +473,13 @@ function scheduleArchiveRescans() {
       if (!client.pupPage) {
         return { messageCount: 0, paginationAvailable: false, errorCode: 'WHATSAPP_PAGE_UNAVAILABLE' };
       }
-      return scanArchiveGroup(group);
+      return scanArchiveGroup(group, {
+        mode: ARCHIVE_SCAN_MODE.PERIODIC_CACHE,
+        stateGeneration: generation,
+      });
     },
     onState: next => {
+      if (generation !== _archiveSchedulerGeneration) return;
       _archiveScanState = { ..._archiveScanState, ...next, mode: 'hydrated_cache_only' };
     },
   });
@@ -682,11 +729,14 @@ function startSendServer() {
   });
 }
 
-// ── Deduplification (in-memory, resets on restart) ────────────────────────────
-const seenUrls = new Set();
+// ── Deduplication (bounded hashes, resets on restart) ─────────────────────────
+// The index never retains URL/query strings or message bodies. Durable URL
+// deduplication is enforced by the local API; this short-lived index only
+// prevents repeated forwarding during a bridge session.
+const seenArchiveItems = createBoundedDeduper();
 
-function markSeen(url) { seenUrls.add(url); }
-function alreadySeen(url) { return seenUrls.has(url); }
+function markSeen(value) { seenArchiveItems.add(value); }
+function alreadySeen(value) { return seenArchiveItems.has(value); }
 
 // ── WhatsApp client ───────────────────────────────────────────────────────────
 const client = new Client({
@@ -759,7 +809,7 @@ client.on('ready', async () => {
       log('info', `  • ${g.name}`);
       // Process last 5 messages from each group on startup
       if (CONFIG.archiveScanOnStart) {
-        await scanArchiveGroup(g);
+        await scanArchiveGroup(g, { mode: ARCHIVE_SCAN_MODE.STARTUP });
       } else {
         const messages = await g.fetchMessages({ limit: 5 });
         for (const m of messages) await processMessage(m);
@@ -787,7 +837,9 @@ client.on('ready', async () => {
         `Read-only metadata fallback found ${fallbackGroups.length} eligible group(s)`
           + ` (${fallbackArchivedCount}/${fallbackGroupCount} marked archived).`,
       );
-      for (const group of fallbackGroups) await scanArchiveGroup(group);
+      for (const group of fallbackGroups) {
+        await scanArchiveGroup(group, { mode: ARCHIVE_SCAN_MODE.STARTUP });
+      }
     } catch (fallbackError) {
       log('warn', `Read-only chat metadata fallback unavailable: ${fallbackError.message}`);
     }
@@ -799,6 +851,10 @@ client.on('ready', async () => {
 
 client.on('disconnected', reason => {
   log('warn', `Disconnected: ${reason}`);
+  // Invalidate any in-flight/queued cache scan before reconnecting. A slow
+  // pass may finish asynchronously, so lifecycle generation checks prevent it
+  // from publishing state into the next authenticated session.
+  invalidateArchiveRescans();
   stopHeartbeat();
   // Attempt reconnect after 10 seconds
   setTimeout(() => {

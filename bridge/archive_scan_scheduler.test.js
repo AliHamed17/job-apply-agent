@@ -79,3 +79,68 @@ test('does not create timers or scan when archive polling is disabled', async ()
   assert.equal(timers.pending().length, 0);
   assert.equal(scans, 0);
 });
+
+test('does not overlap passes and ignores a pass stopped while it is awaiting a group', async () => {
+  const timers = fakeTimers();
+  let release;
+  let scans = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const scheduler = createArchiveScanScheduler({
+    enabled: true,
+    initialDelayMs: 1,
+    initialAttempts: 0,
+    intervalMs: 60_000,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    listGroups: async () => [{ id: 'group-a' }],
+    shouldWatchGroup: () => true,
+    scanGroup: async () => {
+      await pending;
+      scans += 1;
+    },
+  });
+
+  scheduler.start();
+  const firstPass = timers.next();
+  assert.equal(scheduler.getState().running, true);
+  scheduler.stop();
+  release();
+  await firstPass;
+  assert.equal(scans, 0);
+  assert.equal(timers.pending().length, 0);
+  assert.equal(scheduler.getState().active, false);
+});
+
+test('runNow while a pass is running does not start a second pass', async () => {
+  const timers = fakeTimers();
+  let release;
+  let concurrent = 0;
+  let maximumConcurrent = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const scheduler = createArchiveScanScheduler({
+    enabled: true,
+    initialDelayMs: 1,
+    initialAttempts: 0,
+    intervalMs: 60_000,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    listGroups: async () => [{ id: 'group-a' }],
+    shouldWatchGroup: () => true,
+    scanGroup: async () => {
+      concurrent += 1;
+      maximumConcurrent = Math.max(maximumConcurrent, concurrent);
+      await pending;
+      concurrent -= 1;
+    },
+  });
+
+  scheduler.start();
+  const firstPass = timers.next();
+  await Promise.resolve();
+  const secondPass = scheduler.runNow();
+  await secondPass;
+  assert.equal(maximumConcurrent, 1);
+  release();
+  await firstPass;
+  assert.equal(maximumConcurrent, 1);
+});
