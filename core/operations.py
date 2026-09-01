@@ -94,11 +94,42 @@ def _heartbeat_status(component: str, settings: Settings) -> dict[str, Any]:
     return result
 
 
+def _playwright_cache_candidates() -> tuple[Path, ...]:
+    """Return the platform-specific Playwright browser cache locations."""
+
+    candidates: list[Path] = []
+    configured = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if configured and configured != "0":
+        candidates.append(Path(configured))
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(Path(local_app_data) / "ms-playwright")
+
+    # Playwright's defaults are Linux/macOS ``~/.cache/ms-playwright`` and
+    # Windows ``%LOCALAPPDATA%\\ms-playwright``. Keep both fallbacks so a
+    # service launched without the user's shell environment still detects the
+    # installed browser.
+    candidates.extend(
+        (
+            Path.home() / ".cache/ms-playwright",
+            Path.home() / "AppData/Local/ms-playwright",
+        )
+    )
+
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    return tuple(unique)
+
+
 def browser_available() -> bool:
     if shutil.which("chromium") or shutil.which("chromium-browser"):
         return True
-    cache = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", Path.home() / ".cache/ms-playwright"))
-    return cache.exists() and any(cache.glob("chromium-*"))
+    return any(
+        cache.is_dir() and any(cache.glob("chromium-*")) for cache in _playwright_cache_candidates()
+    )
 
 
 def llm_readiness(settings: Settings | None = None) -> dict[str, Any]:
