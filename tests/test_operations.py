@@ -356,6 +356,21 @@ def test_readiness_degrades_for_missing_dependency(tmp_path: Path) -> None:
     assert not report["checks"]["worker"]["ok"]
 
 
+def test_browser_available_detects_windows_playwright_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from core import operations
+
+    windows_cache = tmp_path / "LocalAppData" / "ms-playwright" / "chromium-1234"
+    windows_cache.mkdir(parents=True)
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    monkeypatch.setattr(operations.shutil, "which", lambda _name: None)
+
+    assert operations.browser_available() is True
+
+
 def test_worker_readiness_accepts_read_only_shared_storage(tmp_path: Path) -> None:
     settings = Settings(application_data_dir=str(tmp_path))
     connection = MagicMock()
