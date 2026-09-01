@@ -247,8 +247,19 @@ processed in memory and only deduplicated job-link records are sent to the
 loopback API. WhatsApp can hydrate archived chat windows shortly after the
 session reports ready, so the bridge also performs two bounded cache rescans by
 default (`ARCHIVE_RESCAN_DELAY_MS=30000`, `ARCHIVE_RESCAN_ATTEMPTS=2`). These
-rescans never request unbounded history or persist unrelated message text;
-set the attempts to `0` if the startup-only behavior is preferred.
+rescans never request unbounded history or persist unrelated message text. With
+the optional `FORWARD_TEXT_POSTS` flag enabled, only keyword-matching, no-URL
+job posts are forwarded to the loopback API; otherwise only deduplicated job
+links leave the bridge process. A
+cache-only rescan repeats every ten minutes by default
+(`ARCHIVE_RESCAN_INTERVAL_MS=600000`) so messages hydrated later are picked up
+without restarting the bridge; set the interval to `0` to disable periodic
+polling. Intervals below 60 seconds or malformed values fail closed (periodic
+polling is disabled), and an older explicit `ARCHIVE_RESCAN_ATTEMPTS=0` with no
+interval preserves startup-only behavior. Periodic passes read only already
+hydrated cache windows; they never invoke historical pagination. Historical
+messages that WhatsApp has not hydrated remain unavailable to this read-only
+integration.
 
 For LinkedIn, do not enable scheduled crawling. Use the dedicated Gmail job-alert
 label (local read-only OAuth) or an approved partner feed. For an exact LinkedIn
@@ -277,6 +288,7 @@ prepare-only placeholder-auth bypass.
 | GET | `/health/live` | Process liveness only |
 | GET | `/health/ready` | Dependency and runtime readiness |
 | GET | `/metrics` | Bounded Prometheus exposition |
+| GET | `/api/bridge/status` | Connected state and redacted archive-cache diagnostics |
 | GET | `/api/dashboard/operations` | Protected full local operations snapshot |
 | GET | `/api/discovery/sources` | Versioned discovery-source health and schedule |
 | GET | `/api/discovery/runs` | Bounded durable discovery-run history |

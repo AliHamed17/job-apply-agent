@@ -3525,10 +3525,23 @@ async function fetchBridgeStatus() {
     banner.style.fontSize = '0.875rem';
     banner.style.background = connected ? 'var(--success-bg, #22c55e18)' : 'var(--warning-bg, #f59e0b18)';
     banner.style.border = `1px solid ${connected ? '#22c55e44' : '#f59e0b44'}`;
+    const groupCount = Math.max(0, Math.min(10000, Number(data.groups_watched) || 0));
+    const archiveScan = data.archive_scan && typeof data.archive_scan === 'object'
+        ? data.archive_scan : {};
+    const scanMessageCount = Math.max(
+        0, Math.min(500, Number(archiveScan.last_message_count) || 0),
+    );
+    const paginationNote = archiveScan.last_pagination_available === false
+        ? ' · older history unavailable'
+        : '';
+    const archiveStatus = archiveScan.enabled
+        ? `<span style="color:var(--text-muted);margin-left:8px;">· ${groupCount} archive group(s) · hydrated_cache_only · ${scanMessageCount} cached message(s)${paginationNote}</span>`
+        : '';
     banner.innerHTML = `
         <span style="width:10px;height:10px;border-radius:50%;background:${connected ? 'var(--success)' : 'var(--warning)'};flex-shrink:0;${connected ? 'box-shadow:0 0 6px var(--success)' : ''}"></span>
         <span><strong>Bridge ${connected ? 'connected' : 'disconnected'}</strong>${connected ? '' : ` — last seen ${ago}`}
         ${connected ? `<span style="color:var(--text-muted);margin-left:8px;">· last ping ${ago}</span>` : ''}
+        ${connected ? archiveStatus : ''}
         </span>
         ${!connected ? `<span style="color:var(--text-muted);margin-left:auto;font-size:0.8rem;">Run <code>cd bridge &amp;&amp; node whatsapp_bridge.js</code></span>` : ''}
     `;

@@ -52,8 +52,73 @@ from db.session import get_db
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["dashboard"])
 
-# In-memory bridge heartbeat store (resets on server restart, that's fine)
-_bridge_last_seen: dict[str, str] = {}
+# In-memory bridge heartbeat store (resets on server restart, that's fine).
+# Only bounded counts, timestamps, and fixed reason codes are retained; no
+# WhatsApp message bodies, URLs, group names, or participant data are accepted.
+_bridge_last_seen: dict[str, dict[str, Any]] = {}
+
+
+_ARCHIVE_SCAN_DEFAULTS: dict[str, Any] = {
+    "enabled": False,
+    "active": False,
+    "running": False,
+    "phase": "idle",
+    "mode": "hydrated_cache_only",
+    "last_started_at": None,
+    "last_finished_at": None,
+    "last_group_count": 0,
+    "last_message_count": 0,
+    "last_error_code": None,
+    "last_pagination_available": None,
+}
+
+_BRIDGE_REGISTRY_KEY = "whatsapp-web"
+
+
+def _bounded_int(value: object, *, maximum: int) -> int:
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(maximum, parsed))
+
+
+def _safe_timestamp(value: object) -> str | None:
+    if not isinstance(value, str) or len(value) > 40:
+        return None
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return value
+
+
+def _sanitize_bridge_id(value: object) -> str:
+    """Keep the in-memory heartbeat registry single-key and non-user-defined."""
+    return _BRIDGE_REGISTRY_KEY
+
+
+def _sanitize_archive_scan(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return dict(_ARCHIVE_SCAN_DEFAULTS)
+    reason = normalize_reason_code(value.get("last_error_code"))
+    return {
+        "enabled": bool(value.get("enabled")),
+        "active": bool(value.get("active")),
+        "running": bool(value.get("running")),
+        "phase": "scanning" if value.get("phase") == "scanning" else "idle",
+        "mode": "hydrated_cache_only",
+        "last_started_at": _safe_timestamp(value.get("last_started_at")),
+        "last_finished_at": _safe_timestamp(value.get("last_finished_at")),
+        "last_group_count": _bounded_int(value.get("last_group_count"), maximum=10000),
+        "last_message_count": _bounded_int(value.get("last_message_count"), maximum=500),
+        "last_error_code": None if reason == "NONE" else reason,
+        "last_pagination_available": (
+            bool(value["last_pagination_available"])
+            if isinstance(value.get("last_pagination_available"), bool)
+            else None
+        ),
+    }
 
 
 class DashboardSummary(BaseModel):
@@ -702,9 +767,13 @@ async def bridge_heartbeat(request: Request):
         data: dict[str, Any] = await request.json()
     except Exception:
         data = {}
-    bridge_id = str(data.get("id", "default"))
-    groups = int(data.get("groups_watched", 0))
-    _bridge_last_seen[bridge_id] = datetime.utcnow().isoformat()
+    bridge_id = _sanitize_bridge_id(data.get("id"))
+    groups = _bounded_int(data.get("groups_watched", 0), maximum=10000)
+    _bridge_last_seen[bridge_id] = {
+        "last_seen": datetime.now(UTC).isoformat(),
+        "groups_watched": groups,
+        "archive_scan": _sanitize_archive_scan(data.get("archive_scan")),
+    }
     logger.debug("bridge_heartbeat", bridge_id=bridge_id, groups=groups)
     return {"status": "ok", "bridge_id": bridge_id}
 
@@ -713,8 +782,36 @@ async def bridge_heartbeat(request: Request):
 async def bridge_status():
     """Return the connection status of the WhatsApp bridge."""
     if not _bridge_last_seen:
-        return {"connected": False, "last_seen": None, "groups_watched": 0}
-    last_seen_str = max(_bridge_last_seen.values())
-    last_seen_dt = datetime.fromisoformat(last_seen_str)
-    connected = (datetime.utcnow() - last_seen_dt).total_seconds() < 120
-    return {"connected": connected, "last_seen": last_seen_str}
+        return {
+            "connected": False,
+            "last_seen": None,
+            "groups_watched": 0,
+            "archive_scan": dict(_ARCHIVE_SCAN_DEFAULTS),
+        }
+    latest = max(
+        _bridge_last_seen.values(),
+        key=lambda value: value.get("last_seen", "") if isinstance(value, dict) else str(value),
+    )
+    # Keep compatibility with an entry written by an older process during a
+    # hot reload, while all new entries use the bounded object above.
+    if isinstance(latest, dict):
+        last_seen_str = latest.get("last_seen")
+        groups = _bounded_int(latest.get("groups_watched", 0), maximum=10000)
+        archive_scan = _sanitize_archive_scan(latest.get("archive_scan"))
+    else:
+        last_seen_str = str(latest)
+        groups = 0
+        archive_scan = dict(_ARCHIVE_SCAN_DEFAULTS)
+    try:
+        last_seen_dt = datetime.fromisoformat(str(last_seen_str))
+        if last_seen_dt.tzinfo is None:
+            last_seen_dt = last_seen_dt.replace(tzinfo=UTC)
+        connected = (datetime.now(UTC) - last_seen_dt).total_seconds() < 120
+    except (TypeError, ValueError):
+        connected = False
+    return {
+        "connected": connected,
+        "last_seen": last_seen_str,
+        "groups_watched": groups,
+        "archive_scan": archive_scan,
+    }

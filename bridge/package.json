@@ -5,7 +5,8 @@
   "main": "whatsapp_bridge.js",
   "scripts": {
     "start": "node whatsapp_bridge.js",
-    "dev": "node --watch whatsapp_bridge.js"
+    "dev": "node --watch whatsapp_bridge.js",
+    "test": "node --test *.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
