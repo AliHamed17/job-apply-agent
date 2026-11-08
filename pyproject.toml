@@ -77,7 +77,7 @@ email = [
 [tool.setuptools.packages.find]
 include = [
     "api*", "control_plane*", "core*", "db*", "discovery*", "ingestion*", "jobs*",
-    "llm*", "match*", "profile*", "submitters*", "worker*",
+    "llm*", "match*", "profile*", "submitters*", "worker*", "batch_apply*",
 ]
 
 [tool.pytest.ini_options]
