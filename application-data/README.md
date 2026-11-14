@@ -54,6 +54,13 @@ with `--input application-data/session-update-20261114.json`. Read its
 offline working dataset. Never overlay either snapshot onto a live ledger or
 overwrite newer work. Authentication/session stores remain excluded.
 
+`session-latest-20261114.json` adds a subsequent consistent ledger backup, a
+fresh queryable handoff database, the active CV collection, and the later batch's
+report and receipt evidence. Restore it to a **third new private folder** using
+the same owner key, then read `CODEX_LATEST.md`. Its private inventory records
+capture times and the exact contents. The earlier archives retain the original
+source material and history; this update does not replace or delete them.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
