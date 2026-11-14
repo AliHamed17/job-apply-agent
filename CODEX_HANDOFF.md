@@ -85,6 +85,10 @@ continue independently and record concrete blockers without routine questions.
 
 ## Commands
 
+For WhatsApp selection, the requested two-minute pace, timebox accounting and
+observed upload recovery, read [whatsapp-fast-batches.md](docs/whatsapp-fast-batches.md).
+The pace is a target; only actual receipts establish completed applications.
+
 Run from the execution checkout. Substitute observed values; these examples do
 not supply applicant facts or authorize submissions.
 

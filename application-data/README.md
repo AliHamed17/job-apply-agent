@@ -42,6 +42,18 @@ does not start a browser, model, background service or submission run.
 
 ## Key custody and future snapshots
 
+`session-update-20261114.json` is a separately encrypted incremental snapshot
+using the same separately held owner key and a fresh nonce. It includes the
+selection recording, the timed-run report/evidence, a newer consistent ledger,
+and source/data files added or changed after the base capture began. Its private
+manifest identifies the base archive and the exact capture limits.
+
+Restore the update to a **second new private folder** using the same command
+with `--input application-data/session-update-20261114.json`. Read its
+`CODEX_UPDATE.md`. Compare its newer files with the base before choosing the
+offline working dataset. Never overlay either snapshot onto a live ledger or
+overwrite newer work. Authentication/session stores remain excluded.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
