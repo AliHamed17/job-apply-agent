@@ -4,3 +4,6 @@ tests/fixtures/**/*.html text eol=lf
 
 # Shell helpers execute inside Linux build stages even from Windows checkouts.
 *.sh text eol=lf
+
+# Only authenticated ciphertext is published here; decryption keys stay outside Git.
+application-data/*.enc.part* filter=lfs diff=lfs merge=lfs -text

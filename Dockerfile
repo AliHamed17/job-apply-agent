@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxslt-dev \
         libpq-dev \
         curl \
+        zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Stage 2: deps ──────────────────────────────────────────────────────────
