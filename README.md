@@ -368,6 +368,12 @@ python -m ruff format --check .
 
 ## Applications from open browser tabs
 
+Start with [CODEX_HANDOFF.md](CODEX_HANDOFF.md) to continue an active application
+session. [Private handoff export](docs/private-application-handoff.md) bundles the
+ledger, all configured CVs, profile sources and application steps into a local,
+queryable database. [Batch preparation](docs/low-cost-automation-plan.md) reuses
+verified knowledge without model or network calls.
+
 The [browser batch workflow](docs/browser-batch.md) adds existing-CV file selection,
 duplicate detection, and a persistent outcome ledger for an active LLM session
 working in the user’s signed-in browser. The CLI plans and tracks applications;
