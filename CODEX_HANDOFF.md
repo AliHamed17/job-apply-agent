@@ -125,10 +125,15 @@ historical receipts are not new applications.
 
 ## Private database and portability
 
+For the encrypted repository backup, first follow
+[application-data/README.md](application-data/README.md) using the separately held
+owner key. Restore into a new private folder and read its `CODEX_START.md`.
+
 [private-application-handoff.md](docs/private-application-handoff.md) documents an
 offline export containing the ledger, source documents, CV bytes and evidence in
 one queryable SQLite snapshot. Keep it local. A GitHub clone contains the software
-and templates, not the applicant's private database, CVs or active browser session.
+and templates plus encrypted archive pointers. The separately held key restores
+the private database and CVs. Connect the browser session independently.
 
 The active browser workflow and the separately qualified API/autopilot system are
 different execution paths. Do not enable global submission flags, schedules or

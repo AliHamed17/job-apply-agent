@@ -368,6 +368,10 @@ python -m ruff format --check .
 
 ## Applications from open browser tabs
 
+The owner's [encrypted data archive](application-data/README.md) preserves personal
+files and application history in Git LFS. Restore requires the separately held
+key; plaintext profiles, CVs, evidence and credentials are not published.
+
 Start with [CODEX_HANDOFF.md](CODEX_HANDOFF.md) to continue an active application
 session. [Private handoff export](docs/private-application-handoff.md) bundles the
 ledger, all configured CVs, profile sources and application steps into a local,

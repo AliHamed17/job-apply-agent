@@ -55,6 +55,7 @@ fit_routing_qualification.json
 .linkedin_profile/
 .browser-state/
 runtime-data/
+application-data/
 uploads/
 .test-artifacts/
 .job-agent/

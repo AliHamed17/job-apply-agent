@@ -1,0 +1,43 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "session-data-20261114.enc.part001",
+      "bytes": 536870912,
+      "sha256": "83737ce59c1dc47ff38e0dd5166e404bf9d6ec33c42a59bc75d7e46d6ed00a58"
+    },
+    {
+      "file": "session-data-20261114.enc.part002",
+      "bytes": 536870912,
+      "sha256": "043987e195e686543c7cd2abf3838a9bf8b2247f0389e14d3c33358ec9667b64"
+    },
+    {
+      "file": "session-data-20261114.enc.part003",
+      "bytes": 536870912,
+      "sha256": "55c358a8725e9d0d39ffbda3b6714afa03f1d112d0365df161c9453a6364d441"
+    },
+    {
+      "file": "session-data-20261114.enc.part004",
+      "bytes": 536870912,
+      "sha256": "ebefdcb30c13e5b35c73c0e4f3e87f89f99d5c0d32c291114d71d23e61881a55"
+    },
+    {
+      "file": "session-data-20261114.enc.part005",
+      "bytes": 536870912,
+      "sha256": "d2a89957aa24d33b46ab5ed137df4b15b0084388a11c636ac615e96b9919bc80"
+    },
+    {
+      "file": "session-data-20261114.enc.part006",
+      "bytes": 536870912,
+      "sha256": "533859606aa671a0ed7e717f73dc76620ae3279537d0905916f35ddea7153a88"
+    },
+    {
+      "file": "session-data-20261114.enc.part007",
+      "bytes": 256737666,
+      "sha256": "853a6a6fbbacefacb61a8eb431c5bec86562300fa4978ab0ed9f4ee0410ec828"
+    }
+  ],
+  "ciphertext_sha256": "c3a98e22418347ab79803f2b3a3cedd66d7b6a103f210296158dbac4308daac3",
+  "ciphertext_bytes": 3477963138
+}
