@@ -153,3 +153,20 @@ control_plane/**/*.pfx
 # possibly operator data. Sanitised fixtures are copied into tests/fixtures/
 # deliberately, never synced from here.
 .capture/
+
+# Private LLM browser/application evidence and machine-local backups
+/outputs/recording-review-*/
+/.playwright-mcp/
+/user_profile.yaml.backup*
+/user_profile.yaml.template.bak
+/ai-apply-hardening.patch
+/outputs/session-applications-*/
+/outputs/session-applications-*.zip
+/outputs/build_session_application_report_*.py
+
+# Every generated application report and CV bundle is private.
+/outputs/
+/user_profile.yaml.*
+!/user_profile.yaml.example
+/cv_routing.yaml.*
+!/cv_routing.yaml.example

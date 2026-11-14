@@ -22,30 +22,45 @@ logger = structlog.get_logger(__name__)
 # ── Tracking parameters to strip ───────────────────────────────────────────
 # Generic analytics params — safe to remove from any URL
 TRACKING_PARAMS = {
-    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-    "fbclid", "gclid", "mc_cid", "mc_eid",
-    "igshid", "igsh",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "fbclid",
+    "gclid",
+    "mc_cid",
+    "mc_eid",
+    "igshid",
+    "igsh",
     # LinkedIn tracking
-    "trk", "trkEmail",
+    "trk",
+    "trkEmail",
     # WhatsApp share tracking
-    "wt_mc_o", "wt_mc_n", "wt_mc_t", "wa_source", "wa_campaign",
+    "wt_mc_o",
+    "wt_mc_n",
+    "wt_mc_t",
+    "wa_source",
+    "wa_campaign",
     # Generic referrer param (safe to strip for job boards)
     "si",
 }
 
 # Params that look like tracking but contain meaningful ATS data — never strip
 ATS_PRESERVE_PARAMS = {
-    "gh_jid",        # Greenhouse job ID
-    "gh_src",        # Greenhouse source
+    "gh_jid",  # Greenhouse job ID
+    "gh_src",  # Greenhouse source
     "lever-origin",
-    "j",             # Jobvite job ID
-    "jobId",         # Various ATS
+    "j",  # Jobvite job ID
+    "jobId",  # Various ATS
 }
 
 # ── URL shortener domains ───────────────────────────────────────────────────
 SHORT_URL_DOMAINS = {
     # Global shorteners
-    "bit.ly", "bitly.com", "b.link",
+    "bit.ly",
+    "bitly.com",
+    "b.link",
     "t.co",
     "goo.gl",
     "tinyurl.com",
@@ -65,7 +80,8 @@ SHORT_URL_DOMAINS = {
     "zpr.io",
     "mcaf.ee",
     # LinkedIn
-    "lnkd.in", "linkedin.com/slink",
+    "lnkd.in",
+    "linkedin.com/slink",
     # WhatsApp / Meta
     "wa.me",
     "fb.me",
@@ -130,9 +146,8 @@ def is_likely_job_url(url: str) -> bool:
     return False
 
 
-# ── WhatsApp text formatting strippers ─────────────────────────────────────
-# WhatsApp uses markdown-like formatting that can wrap URLs
-_WA_FORMAT_RE = re.compile(r"[*_~`]")
+# Formatting can wrap a URL; the same characters inside it are URL data.
+_WA_URL_PREFIX_RE = re.compile(r"(?<!\w)([*_~`]+)$")
 
 # ── Core URL regex ─────────────────────────────────────────────────────────
 _URL_RE = re.compile(
@@ -171,12 +186,15 @@ def extract_urls(text: str) -> list[str]:
     if not text:
         return []
 
-    # Strip WhatsApp formatting characters that may wrap a URL
-    cleaned_text = _WA_FORMAT_RE.sub(" ", text)
-
     seen: set[str] = set()
     result: list[str] = []
-    for raw in _URL_RE.findall(cleaned_text):
+    for match in _URL_RE.finditer(text):
+        raw = _clean_url(match.group())
+        opening = _WA_URL_PREFIX_RE.search(text[: match.start()])
+        if opening:
+            closing = opening.group(1)[::-1]
+            if raw.endswith(closing):
+                raw = raw[: -len(closing)]
         u = _decode_if_encoded(_clean_url(raw))
         if u and u not in seen:
             seen.add(u)
@@ -269,7 +287,8 @@ def normalize_url(url: str) -> str:
         if parsed.query:
             qs = parse_qs(parsed.query, keep_blank_values=True)
             filtered = {
-                k: v for k, v in qs.items()
+                k: v
+                for k, v in qs.items()
                 if k.lower() not in TRACKING_PARAMS or k in ATS_PRESERVE_PARAMS
             }
             query = urlencode(filtered, doseq=True) if filtered else ""

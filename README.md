@@ -366,6 +366,26 @@ python -m ruff check .
 python -m ruff format --check .
 ```
 
+## Applications from open browser tabs
+
+Start with [CODEX_HANDOFF.md](CODEX_HANDOFF.md) to continue an active application
+session. [Private handoff export](docs/private-application-handoff.md) bundles the
+ledger, all configured CVs, profile sources and application steps into a local,
+queryable database. [Batch preparation](docs/low-cost-automation-plan.md) reuses
+verified knowledge without model or network calls.
+
+The [browser batch workflow](docs/browser-batch.md) adds existing-CV file selection,
+duplicate detection, and a persistent outcome ledger for an active LLM session
+working in the user’s signed-in browser. The CLI plans and tracks applications;
+browser execution uses the connected browser tools. Prepared and confirmed
+submissions are recorded separately, with explicit evidence and recovery rules.
+
+[Workflow packets](docs/application-workflow.md), the
+[verified answer cache](docs/verified-answer-cache.md), and
+[cached public discovery](docs/fast-discovery.md) reuse local evidence. A
+[local employer policy](docs/employer-policy.md) checks target companies before
+claiming work and again before the browser submits.
+
 ## License
 
 MIT
