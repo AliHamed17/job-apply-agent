@@ -61,6 +61,13 @@ the same owner key, then read `CODEX_LATEST.md`. Its private inventory records
 capture times and the exact contents. The earlier archives retain the original
 source material and history; this update does not replace or delete them.
 
+`session-latest-20261115.json` contains the next consistent ledger, queryable
+handoff database, active CV collection, and application reports with receipt and
+blocker evidence. Restore it to a **fourth new private folder**, then read its
+`CODEX_LATEST.md` for the exact outcomes, pending work and continuation rules.
+Its private manifest identifies both included batches and their capture limits.
+The earlier archives remain part of the complete historical dataset.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
