@@ -83,6 +83,11 @@ continue independently and record concrete blockers without routine questions.
     observed outcomes or concrete blockers. On interruption, save the pending URL,
     last action, last observed state and next step without resetting claims.
 
+If the platform displays an application limit, save its exact notice and stop
+submissions on that platform. Preserve the remaining target in the checkpoint.
+Do not bypass the limit or switch accounts to evade it. Resume only after the
+live limit has cleared and current authorization still covers the remaining work.
+
 ## Commands
 
 For WhatsApp selection, the requested two-minute pace, timebox accounting and
