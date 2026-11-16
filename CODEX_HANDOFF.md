@@ -88,6 +88,24 @@ submissions on that platform. Preserve the remaining target in the checkpoint.
 Do not bypass the limit or switch accounts to evade it. Resume only after the
 live limit has cleared and current authorization still covers the remaining work.
 
+## Direct company applications
+
+Use company-site forms when the current user request authorizes them. Preserve
+the original posting URL and employer requisition alongside any hosted ATS form.
+Compare descriptions, team and product as well as identifiers when reconciling
+cross-platform duplicates. A different identifier can still be a duplicate
+posting; similar titles can describe distinct roles. When a confirmed direct
+application resolves a prior source listing, record the alias reconciliation
+without counting a second submission or erasing the earlier blocker history.
+
+Inspect each form before entering data. For an embedded ATS, a directly observed
+application iframe URL may be opened with the supported browser tool if needed
+for file upload. Use its visible attachment control, verify the attached filename,
+and avoid storing access-bearing query parameters. Do not guess endpoints or
+replace the visible form flow with HTTP submission. After a Submit wait times
+out, reobserve the page before deciding the outcome; never click Submit again
+merely because the receipt was slow to appear.
+
 ## Commands
 
 For WhatsApp selection, the requested two-minute pace, timebox accounting and
