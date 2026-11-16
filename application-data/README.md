@@ -76,6 +76,13 @@ batch reports as historical snapshots; its private manifest distinguishes the
 current outcomes from earlier counts. Keep the earlier archives for the complete
 source history and selection recording.
 
+`session-company-next20-20261116.json` captures the subsequent company-site batch,
+the latest consistent ledger, queryable handoff, active CVs, ordered steps and
+receipt evidence. Restore it to a **sixth new private folder** and read its
+`CODEX_LATEST.md`. Its private manifest distinguishes the new batch from the three
+preceding reports, including the provenance of page and employer-email receipts.
+Keep all earlier snapshots for the complete source history.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
