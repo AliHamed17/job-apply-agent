@@ -83,6 +83,13 @@ receipt evidence. Restore it to a **sixth new private folder** and read its
 preceding reports, including the provenance of page and employer-email receipts.
 Keep all earlier snapshots for the complete source history.
 
+`session-company-more20-20261116.json` preserves the next application checkpoint,
+including confirmed receipts, unresolved work, the consistent ledger, queryable
+handoff and active CVs. Restore it to a **seventh new private folder** and read
+`CODEX_LATEST.md`. This snapshot explicitly distinguishes an interrupted request
+from completed historical batches; restoring it does not resume submissions.
+Keep all previous archives for the complete source history.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
