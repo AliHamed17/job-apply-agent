@@ -68,6 +68,14 @@ blocker evidence. Restore it to a **fourth new private folder**, then read its
 Its private manifest identifies both included batches and their capture limits.
 The earlier archives remain part of the complete historical dataset.
 
+`session-company-20261116.json` adds a consistent ledger and queryable handoff
+after the authorized company-site batch, with its application steps, receipt
+evidence, active CV collection and continuation notes. Restore it to a **fifth
+new private folder** and read `CODEX_LATEST.md`. It also retains the preceding
+batch reports as historical snapshots; its private manifest distinguishes the
+current outcomes from earlier counts. Keep the earlier archives for the complete
+source history and selection recording.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
