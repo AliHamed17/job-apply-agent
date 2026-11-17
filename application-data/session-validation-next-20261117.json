@@ -1,0 +1,73 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "session-validation-next-20261117.enc.part001",
+      "bytes": 16777216,
+      "sha256": "33aac896d38819d94c6039d35b7cce144064e6ae573ffedd9d253fa2ae61865e"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part002",
+      "bytes": 16777216,
+      "sha256": "d754c66cfaa45180f2201f8512ad6bfcf9056e6d5e5a0c08feee1c62c87a891d"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part003",
+      "bytes": 16777216,
+      "sha256": "248c22b140b9b2aaef42f90aab9118292571dba04494ede0e9f4b0088d07fac2"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part004",
+      "bytes": 16777216,
+      "sha256": "0bab46c46302abc8a85ea76c285f95ae3cea7fe5d7232d1bc785f010810dfdcd"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part005",
+      "bytes": 16777216,
+      "sha256": "1b39a54e6995c4fc23ec0caad335779da6f4f24f620afd06877c7e0663312775"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part006",
+      "bytes": 16777216,
+      "sha256": "0d003c3e0f7fc4db11d23844ef8b49cbaf1bf7db38d5290d8c8dbe01596ab753"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part007",
+      "bytes": 16777216,
+      "sha256": "d2efc501efee7a78ce6dbaf684491358a4ca4fa87e785f3a69bea70cab29ce25"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part008",
+      "bytes": 16777216,
+      "sha256": "c5ca11012f328f49f15b9165881707167cf02d69e4179fd76623e6a1ddcf6e1d"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part009",
+      "bytes": 16777216,
+      "sha256": "6209d02f476e308425b991fa456719b622850ad894d0e5cf2790152dd3ec3769"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part010",
+      "bytes": 16777216,
+      "sha256": "44feb4fa6da3a7462223e708b8f1867891d22c8a2795155be26ecf7ecb978846"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part011",
+      "bytes": 16777216,
+      "sha256": "d20db5b3dfe7d47b7a8654adb6070286b8a36fb0274cf8203a5fa5cf5133f7eb"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part012",
+      "bytes": 16777216,
+      "sha256": "d254d49d1d6487f2ec4b22ebaf69e6820bca5b12cadf84c4e4eb85cd2229b003"
+    },
+    {
+      "file": "session-validation-next-20261117.enc.part013",
+      "bytes": 10908105,
+      "sha256": "0e80ace93ab7df34d475ee7e8d8e98a22c83a706d5a86de6b295e443d0398b97"
+    }
+  ],
+  "ciphertext_sha256": "7f1313214b0184a6aeaa5cf635586779b4df8b51e68c231cc9a8774c80108055",
+  "ciphertext_bytes": 212234697
+}
