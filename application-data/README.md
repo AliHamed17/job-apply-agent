@@ -104,6 +104,17 @@ Restore it to a **ninth new private folder** and read `CODEX_LATEST.md`. The pri
 report distinguishes incomplete work from historical completed requests and
 concurrent-session outcomes. Keep all previous snapshots for the full history.
 
+`session-validation-20261117.json` is an authenticated incremental update over
+`session-company-more20-20261117.json`. It preserves updated application records,
+confirmed preferences, review evidence, a consistent ledger, and a fresh queryable
+handoff while reusing unchanged CVs and historical evidence from that base.
+Restore each archive to a **separate new private folder**, then read the update's
+`CODEX_LATEST.md`. Its included offline assembly helper verifies every inherited
+and updated file against the authenticated complete inventory before copying to
+a third, new private directory. It refuses existing output directories and does
+not modify the live application database. Preserve all earlier archives, and
+reconcile newer live records before adopting a restored snapshot.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
