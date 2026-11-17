@@ -97,6 +97,13 @@ receipt evidence. Restore it to an **eighth new private folder** and read its
 batches and concurrent-session activity. Preserve any independent live claims
 and reconcile newer work before using a restored snapshot.
 
+`session-company-more20-20261117.json` preserves the latest application checkpoint,
+including its remaining target, confirmed receipts, updated user-confirmed facts,
+consistent ledger backup, queryable handoff, active CVs and private source changes.
+Restore it to a **ninth new private folder** and read `CODEX_LATEST.md`. The private
+report distinguishes incomplete work from historical completed requests and
+concurrent-session outcomes. Keep all previous snapshots for the full history.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
