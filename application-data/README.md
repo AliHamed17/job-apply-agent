@@ -90,6 +90,13 @@ handoff and active CVs. Restore it to a **seventh new private folder** and read
 from completed historical batches; restoring it does not resume submissions.
 Keep all previous archives for the complete source history.
 
+`session-company20-20261117.json` captures the next completed company-site batch,
+with a consistent ledger backup, queryable handoff, active CVs, ordered steps and
+receipt evidence. Restore it to an **eighth new private folder** and read its
+`CODEX_LATEST.md`. Its private reports distinguish this request from historical
+batches and concurrent-session activity. Preserve any independent live claims
+and reconcile newer work before using a restored snapshot.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
