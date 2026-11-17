@@ -115,6 +115,17 @@ a third, new private directory. It refuses existing output directories and does
 not modify the live application database. Preserve all earlier archives, and
 reconcile newer live records before adopting a restored snapshot.
 
+`session-validation-next-20261117.json` adds the next application checkpoint as
+an authenticated delta over the assembled `session-validation-20261117.json`
+snapshot. It contains the latest ledger, queryable handoff, continuation report,
+application steps and receipt evidence, while inheriting unchanged CVs and
+historical files. Restore the preceding base and delta first, then restore this
+update to a separate new private directory. Read `CODEX_LATEST.md` and use its
+offline assembly helper to verify and combine the complete inventory in another
+new directory. The private report distinguishes confirmed applications, duplicate
+responses and unfinished work. Preserve older archives and reconcile newer live
+records before adopting any restored snapshot.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
