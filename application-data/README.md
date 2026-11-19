@@ -126,6 +126,15 @@ new directory. The private report distinguishes confirmed applications, duplicat
 responses and unfinished work. Preserve older archives and reconcile newer live
 records before adopting any restored snapshot.
 
+`session-validation20-20261118.json` preserves the next incomplete application
+checkpoint as an authenticated delta over the assembled
+`session-validation-next-20261117.json` snapshot. It includes the current ledger,
+queryable handoff, report, evidence and original CV collection. Restore the
+preceding chain first, then restore this delta and assemble into another new
+private directory using the authenticated helper. Read `CODEX_LATEST.md` for
+confirmed outcomes and unfinished work. Preserve independent live sessions and
+reconcile newer records before using this offline snapshot.
+
 Keep a separate secure backup of the key. Losing every copy makes the encrypted
 data unrecoverable; publishing the key would disclose the archive. Never paste it
 in a chat, commit, issue, CI variable, or public release.
