@@ -1,0 +1,73 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "session-validation20-20261118.enc.part001",
+      "bytes": 16777216,
+      "sha256": "79ff3ca54b88dbc2559d1b12a1f637c3c673e13a3fcbd54c13f5c667cd3a57d1"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part002",
+      "bytes": 16777216,
+      "sha256": "892789d1a7606c2b680f4300f38461eba1d49cc3afb7fc0cfc4538bac724829c"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part003",
+      "bytes": 16777216,
+      "sha256": "e15a66df4b7cd3a459e6c10c937725f17f5d3c9d8bc9871dd3e50b30416b1110"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part004",
+      "bytes": 16777216,
+      "sha256": "d48cb5cb05c0aa56400d6d685e0d6d12f24f55d12c1d54b2105313b5e47134ea"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part005",
+      "bytes": 16777216,
+      "sha256": "df0bd97a5f9772b446ba95236deb22d5b5d93511ce045c24bcac67ee024376de"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part006",
+      "bytes": 16777216,
+      "sha256": "36bc5297999b64d10b228ef096ef73fa176ca0f2bd4ebfe4b6527c3bd915aa9a"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part007",
+      "bytes": 16777216,
+      "sha256": "4266ab878897d7267e7071489512e4735089674473efa3f4dcea3a288fbe48a7"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part008",
+      "bytes": 16777216,
+      "sha256": "196f285e6dda2099cb9ff11499d74238129809586e5801212d6a62a5aba332e4"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part009",
+      "bytes": 16777216,
+      "sha256": "4debaaa410fc0d111d280a6309e814e23dc8800fdfea2dc20cb4aa47f27a65a7"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part010",
+      "bytes": 16777216,
+      "sha256": "e8732b52b1a37c6c188d021f89a9703fe412ad717ab6db409350be0bb96528c5"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part011",
+      "bytes": 16777216,
+      "sha256": "5c0bbda7822841b53a1c8baadde79f3b162d6a78d9003fd2c9f568d1cd2afe9b"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part012",
+      "bytes": 16777216,
+      "sha256": "77a80335d97ecaeb6302d7c98f91a815e8270c20993341019c96c4bc946d4996"
+    },
+    {
+      "file": "session-validation20-20261118.enc.part013",
+      "bytes": 10888397,
+      "sha256": "4ede0b56766f7d1646aef30191d48d7bb9aad422f1ebe6b698617ed6fdfa4849"
+    }
+  ],
+  "ciphertext_sha256": "835de3a258797a865e88a9eee1f32f10c85fa469e6b14c87fd5661eb6460325a",
+  "ciphertext_bytes": 212214989
+}
