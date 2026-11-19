@@ -149,3 +149,10 @@ and verify the uploaded copy before declaring a backup complete.
 The encrypted data is excluded from Docker image builds. The existing Vercel
 allowlist also excludes this directory. No decryption key is sent to either
 deployment environment or GitHub Actions.
+
+`session-validation19-20261119.json` adds an authenticated continuation delta over
+the assembled `session-validation20-20261118.json` snapshot. It preserves the
+updated ledger, queryable export, original CVs, evidence and private handoff.
+Restore and assemble the preceding chain first, then this delta into a new
+private directory. Read `CODEX_LATEST.md` for confirmed results and remaining
+work; reconcile newer live records before using the snapshot.
