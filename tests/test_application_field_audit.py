@@ -59,7 +59,7 @@ def test_unreadable_readback_requires_attention_and_bool_is_not_one(tmp_path):
     assert result["requires_attention"] is True
 
 
-@pytest.mark.parametrize("key", ["before", "entered", "read_back"])
+@pytest.mark.parametrize("key", ["before", "entered", "read_back", "expected"])
 def test_credential_values_rejected_atomically(tmp_path, key):
     db = str(tmp_path / "ledger.db")
     bad = field("secret", "Verification code", "", "")
@@ -76,3 +76,44 @@ def test_cli_never_prints_field_values(tmp_path, capsys):
     )
     assert main([str(p), "--ledger", str(tmp_path / "ledger.db")]) == 0
     assert "private@example.com" not in capsys.readouterr().out
+
+
+def test_prefill_requires_expected_evidence_and_detects_misplaced_value(tmp_path):
+    common = {"action": "observed_existing", "timestamp": "2026-11-21T12:00:00Z"}
+    fields = [
+        {
+            **common,
+            "event_id": "wrong",
+            "label": "Address",
+            "read_back": "a@example.test",
+            "expected": "Main Street",
+        },
+        {**common, "event_id": "unknown", "label": "Employer", "read_back": "Example"},
+        {
+            **common,
+            "event_id": "correct",
+            "label": "City",
+            "read_back": "Example City",
+            "expected": "Example City",
+        },
+    ]
+    result = append_field_captures(str(tmp_path / "ledger.db"), batch(fields))
+    assert result["verification_counts"] == {"mismatch": 1, "unverified": 1, "match": 1}
+    assert result["requires_attention"] is True
+
+
+def test_required_blank_and_entry_conflicting_with_expected_need_attention(tmp_path):
+    fields = [
+        {
+            "event_id": "blank",
+            "label": "Name",
+            "action": "left_blank",
+            "required": True,
+            "read_back": "",
+            "timestamp": "2026-11-21T12:00:00Z",
+        },
+        field("wrong", "City", "Wrong City", "Wrong City", expected="Correct City"),
+    ]
+    result = append_field_captures(str(tmp_path / "ledger.db"), batch(fields))
+    assert result["verification_counts"] == {"unverified": 1, "mismatch": 1}
+    assert result["requires_attention"] is True
