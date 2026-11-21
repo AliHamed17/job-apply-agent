@@ -191,3 +191,11 @@ assembly helper and reconcile newer live activity before using the ledger.
 checkpoint over the assembled shared-ledger snapshot. Restore and assemble it
 with the same helper, then review the private handoff and reconcile newer live
 activity before using the ledger.
+
+`session-validation18-next-checkpoint-20261121.json` is a subsequent authenticated
+delta over the assembled validation continuation checkpoint. Restore with the
+same helper and reconcile any later live activity before using the ledger.
+
+`session-validation18-final-checkpoint-20261121.json` is a subsequent encrypted
+delta over the preceding checkpoint and includes later recorded observations.
+Restore it with the same helper and reconcile subsequent live activity.
