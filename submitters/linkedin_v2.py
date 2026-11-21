@@ -283,7 +283,19 @@ class LinkedInV2Submitter(BaseSubmitter):
                     error=f"NEEDS_REVIEW:{plan.blocked_by}",
                 )
 
-            await self._fill_step(page, plan.fills, resume_path)
+            failed_fields = await self._fill_step(page, plan.fills, resume_path)
+            if failed_fields:
+                discarded = await self._discard(page)
+                self._trace(
+                    "terminal",
+                    terminal_reason="FIELD_FILL_UNVERIFIED" if discarded else "DISCARD_FAILED",
+                )
+                return SubmissionResult(
+                    success=discarded,
+                    platform=self.platform_name,
+                    status="draft_only" if discarded else "failed",
+                    error="FIELD_FILL_UNVERIFIED",
+                )
 
             submit_btn = page.locator(selectors.join(selectors.SUBMIT_BUTTON)).first
             if await submit_btn.is_visible(timeout=2000):
@@ -354,18 +366,22 @@ class LinkedInV2Submitter(BaseSubmitter):
 
     # ── Field filling ────────────────────────────────────────────────────
 
-    async def _fill_step(self, page, fills: dict[str, str], resume_path: str | None) -> None:
-        """Apply the resolved answers for this step, then upload the resume."""
+    async def _fill_step(self, page, fills: dict[str, str], resume_path: str | None) -> list[str]:
+        """Fill planned answers and return fields that cannot be read back."""
+        failed_fields = []
         for label, value in fills.items():
             filled = await self._fill_by_label(page, label, value)
             if not filled:
                 logger.debug("linkedin_v2_field_not_matched", label=label)
+                failed_fields.append(label)
 
         if resume_path and Path(resume_path).exists():
             file_input = page.locator('input[type="file"]').first
             if await file_input.count() > 0:
                 await file_input.set_input_files(resume_path)
                 await page.wait_for_timeout(1000)
+
+        return failed_fields
 
     async def _fill_by_label(self, page, label: str, value: str) -> bool:
         """Locate the control for `label` (input/textarea/select/radio-group) and set `value`."""
@@ -380,20 +396,33 @@ class LinkedInV2Submitter(BaseSubmitter):
                 tag = await target.evaluate("el => el.tagName.toLowerCase()")
                 if tag == "select":
                     await target.select_option(label=str(value))
-                    return True
+                    selected = target.locator("option:checked").first
+                    return await selected.count() == 1 and (
+                        await selected.inner_text()
+                    ).strip() == str(value)
                 if tag in ("input", "textarea"):
                     if await target.is_visible() and await target.is_editable():
                         await target.fill(str(value))
-                        return True
+                        return await target.input_value() == str(value)
 
         # Radio/checkbox group: label is the fieldset legend text; click
         # the option whose own label text matches the resolved value.
         option = page.locator(
             f'fieldset:has(legend:has-text("{label}")) label:has-text("{value}")'
         ).first
-        if await option.count() > 0:
+        if await option.count() > 0 and (
+            (await option.inner_text()).strip().casefold() == str(value).strip().casefold()
+        ):
             await option.click()
-            return True
+            control = option.locator('input[type="radio"], input[type="checkbox"]').first
+            if await control.count() == 0:
+                option_for = await option.get_attribute("for")
+                if not option_for:
+                    return False
+                import json
+
+                control = page.locator(f"[id={json.dumps(option_for)}]").first
+            return await control.count() == 1 and await control.is_checked()
 
         return False
 
