@@ -36,6 +36,27 @@ file contents, employer identity or submission. Do not put passwords, codes,
 session data or other credentials into the review or its artifacts. The
 activity secret filter catches common patterns, not every possible secret.
 
+## Application flow shown in the recording
+
+The demonstrated flow moves between already-open job tabs and handles both
+LinkedIn Easy Apply and employer forms:
+
+1. Inspect the role and choose a matching resume from the site's saved files or
+   the local role-specific CV collection. Record the visible label separately
+   from a verified file hash.
+2. Review autofilled contact and other form fields against supported facts;
+   provider autofill can put a value in the wrong field. Keep role-specific
+   questions and consent choices scoped to the current application.
+3. Record an initiated submission as an attempt. A processing indicator or a
+   LinkedIn external-apply click is not a receipt.
+4. If a page is still processing, continue with other eligible work and return
+   to check it. Record success only when the relevant job's confirmation is
+   visible. Otherwise preserve the uncertain outcome and do not retry it.
+
+Browser actions against one shared session must remain coordinated. An open
+tab, demonstrated choice, or saved observation does not itself authorize a
+future action or prove that an unattended executor is running.
+
 Create a JSON review in `runtime-data/` using a SHA-256 hash of the original
 recording. Set `recorded_at` to the recording start time with an explicit
 timezone; offsets are seconds from that start, not wall-clock times. This time is
