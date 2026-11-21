@@ -16,7 +16,11 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from batch_apply.activity import reject_secrets
+from batch_apply.activity import (
+    recording_requires_reconciliation,
+    recording_source_aliases,
+    reject_secrets,
+)
 from batch_apply.answer_cache import (
     AnswerCache,
     load_answer_cache,
@@ -274,7 +278,7 @@ def prepare_packet(
     if not gate["allowed"]:
         packet["next_action"] = "skip_excluded_employer"
         return packet
-    jobs, _ = _read_ledger(ledger_path)
+    jobs, events = _read_ledger(ledger_path)
     matches = [
         job
         for job in jobs
@@ -297,9 +301,16 @@ def prepare_packet(
         if statuses & {"in_progress", "submission_uncertain"}:
             packet["next_action"] = "reconcile_existing_attempt"
             return packet
-        if "blocked" in statuses:
-            packet["next_action"] = "review_existing_blocker"
-            return packet
+    aliases = [application.job.url]
+    for job in matches:
+        aliases.extend([job.canonical_url, *job.source_urls])
+    aliases = recording_source_aliases([job.model_dump(mode="json") for job in jobs], aliases)
+    if recording_requires_reconciliation(events, aliases):
+        packet["next_action"] = "reconcile_existing_attempt"
+        return packet
+    if stored and "blocked" in statuses:
+        packet["next_action"] = "review_existing_blocker"
+        return packet
     cache = load_answer_cache(cache_path)
     issues = validate_cache_sources(cache)
     if issues:
