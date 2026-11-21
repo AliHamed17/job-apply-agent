@@ -181,3 +181,8 @@ the assembled recording-reconciliation snapshot. Restore it with the same
 repository assembly helper and read its private handoff for the unfinished batch
 and snapshot time. Reconcile any newer live activity before using the restored
 ledger.
+
+`session-shared-ledger-20261121.json` is a later authenticated checkpoint over
+the assembled `session-validation18-20261121.json` snapshot. It preserves
+additional shared-ledger activity at its capture time. Restore it with the same
+assembly helper and reconcile newer live activity before using the ledger.

@@ -1,0 +1,13 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "session-shared-ledger-20261121.enc.part001",
+      "bytes": 5888504,
+      "sha256": "527e3b4ad385aa54423993f35ed48d6a2d9d5d1d53d9e5c65509379f623ef16d"
+    }
+  ],
+  "ciphertext_sha256": "527e3b4ad385aa54423993f35ed48d6a2d9d5d1d53d9e5c65509379f623ef16d",
+  "ciphertext_bytes": 5888504
+}
