@@ -186,3 +186,8 @@ ledger.
 the assembled `session-validation18-20261121.json` snapshot. It preserves
 additional shared-ledger activity at its capture time. Restore it with the same
 assembly helper and reconcile newer live activity before using the ledger.
+
+`session-validation18-continuation-20261121.json` is a later authenticated
+checkpoint over the assembled shared-ledger snapshot. Restore and assemble it
+with the same helper, then review the private handoff and reconcile newer live
+activity before using the ledger.

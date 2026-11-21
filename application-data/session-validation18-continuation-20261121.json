@@ -1,0 +1,13 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "session-validation18-continuation-20261121.enc.part001",
+      "bytes": 7743566,
+      "sha256": "b2accc44397c8babe8b939bbd5ae2e5db732abd2af2796a35d4bafb0b6b71828"
+    }
+  ],
+  "ciphertext_sha256": "b2accc44397c8babe8b939bbd5ae2e5db732abd2af2796a35d4bafb0b6b71828",
+  "ciphertext_bytes": 7743566
+}
