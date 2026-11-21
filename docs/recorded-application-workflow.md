@@ -47,3 +47,18 @@ it is not automatically connected to every browser adapter. CAPTCHA, required
 legal agreements and account recovery must be skipped when their required
 confirmation or handoff is unavailable. No long-running executor or automatic
 repository-push service is installed by this document.
+
+## Local model qualification status on 2026-11-21
+
+The checked-in local-model report was generated with an earlier set of runtime
+packages. Its source-integrity record does not match the current
+`config/qualified_runtime_packages.json`, so the report is stale for the
+current runtime. The currentness and aggregate-report tests failed in CI for
+that reason. This mismatch predates the recording-workflow changes.
+
+Before relying on the local-model qualification gate, rerun the real evaluator
+with the exact model, server, Redis lease, Python and package versions required
+by the current qualification configuration. Publish a new report only if the
+real run succeeds; do not change report hashes to make an old run appear current.
+Even a passing synthetic-fixture report does not qualify an employer site or
+prove the correctness of answers on live forms.
