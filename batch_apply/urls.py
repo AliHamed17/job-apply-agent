@@ -59,6 +59,19 @@ def canonical_job_url(raw: str) -> str:
             job_id = match.group(1)
         if job_id.isdigit():
             return f"https://www.linkedin.com/jobs/view/{job_id}"
+    # Qualcomm displays the same numeric posting ID in its job and application
+    # routes. Restrict this mapping to the exact employer host and a numeric pid;
+    # other hosts and ambiguous identifiers retain their original identities.
+    if hostname == "careers.qualcomm.com" and path in {"/careers/apply", "/careers/apply/success"}:
+        pids = [v for k, v in query if k.lower() == "pid"]
+        domains = [v for k, v in query if k.lower() == "domain"]
+        if (
+            len(pids) == 1
+            and pids[0].isdigit()
+            and len(domains) <= 1
+            and (not domains or domains[0].lower() == "qualcomm.com")
+        ):
+            return f"https://careers.qualcomm.com/careers/job/{pids[0]}"
     # These provider-specific form/success routes retain the posting identity.
     # Keep other suffixes/hosts unchanged: an arbitrary /apply is not proof that
     # its parent URL is the same job. Neither suffix implies an application state.

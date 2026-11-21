@@ -156,3 +156,17 @@ updated ledger, queryable export, original CVs, evidence and private handoff.
 Restore and assemble the preceding chain first, then this delta into a new
 private directory. Read `CODEX_LATEST.md` for confirmed results and remaining
 work; reconcile newer live records before using the snapshot.
+
+`session-recording-20261121.json` adds an authenticated recording and application
+checkpoint over the assembled `session-validation19-20261119.json` snapshot.
+Restore and assemble the preceding chain first, then restore this delta into a
+new private directory. The private handoff describes recorded outcomes, remaining
+work, and how to reconcile a snapshot with newer live records.
+
+For the recording checkpoint and later deltas, use the repository helper below
+after independently restoring the base and delta to separate private directories.
+It verifies every inventory file before creating the assembled output.
+
+```powershell
+python -m scripts.assemble_application_snapshot --base PRIVATE_BASE --delta PRIVATE_DELTA --output NEW_PRIVATE_OUTPUT
+```

@@ -64,3 +64,34 @@ Python callers can use `ActivityStore(path).append_batch(payload)` and
 `ActivityStore(path).export(run_id=..., job_url=...)`. No network or browser
 actions occur in this API. A confirmation route or submit click is only an
 observation; a positive, job-matching result remains necessary for submission.
+
+## Structured field capture and read-back
+
+`scripts.log_application_fields` accepts a private JSON batch with one object
+per observed field, records before/entered/read-back values in the local ledger,
+and reports `match`, `mismatch`, `unverified`, or `observed` without printing
+the values. Include a stable event ID and timezone-aware timestamp to make
+retries idempotent. `requires_attention` means at least one value was mismatched
+or unreadable and the executor should not submit that application. Observed
+prefill is historical evidence, not a verified fact. The helper does not drive a
+browser or automatically intercept every adapter.
+
+```json
+{"run_id":"run-example","job_url":"https://example.test/jobs/42",
+ "company":"Example","title":"Test Engineer","fields":[
+  {"event_id":"example-001","label":"Email","control":"textbox",
+   "step":"contact","required":true,"action":"entered",
+   "before":"","entered":"person@example.test","read_back":"person@example.test",
+   "source":"verified profile","timestamp":"2026-11-21T12:00:00Z"}
+ ]}
+```
+
+```powershell
+python -m scripts.log_application_fields runtime-data/field-captures.json --ledger runtime-data/browser-batch.sqlite3
+```
+
+The helper rejects common credential fields and values, including before and
+read-back values, and writes the complete batch atomically. It cannot detect
+all secrets hidden in arbitrary text or screenshots; sanitize artifacts before
+capture. A caller must still verify the live values and honor all applicable
+submission controls.
