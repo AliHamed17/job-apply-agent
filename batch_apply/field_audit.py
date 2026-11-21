@@ -38,6 +38,7 @@ class FieldCapture(BaseModel):
     before: FieldValue = None
     entered: FieldValue = None
     read_back: FieldValue = None
+    expected: FieldValue = None
     source: str = Field(default="", max_length=300)
     timestamp: datetime
     artifact_paths: list[str] = Field(default_factory=list)
@@ -57,7 +58,7 @@ class FieldCapture(BaseModel):
             raise ValueError("Only an entered action may contain an entered value")
         # Validate each value with its label: the generic activity secret filter
         # must also see read-back and prefill values next to the field name.
-        for value in (self.before, self.entered, self.read_back):
+        for value in (self.before, self.entered, self.read_back, self.expected):
             reject_secrets({"label": self.label, "value": value})
         return self
 
@@ -73,13 +74,21 @@ class FieldCaptureBatch(BaseModel):
 
 def _verification(field: FieldCapture) -> str:
     if field.action == "left_blank":
-        if field.read_back is None:
+        if field.required or field.read_back is None:
             return "unverified"
         return "match" if field.read_back == "" else "mismatch"
     if field.action == "observed_existing":
-        return "observed" if field.read_back is not None else "unverified"
+        if field.read_back is None or field.expected is None:
+            return "unverified"
+        if type(field.read_back) is type(field.expected) and field.read_back == field.expected:
+            return "match"
+        return "mismatch"
     if field.read_back is None:
         return "unverified"
+    if field.expected is not None and (
+        type(field.entered) is not type(field.expected) or field.entered != field.expected
+    ):
+        return "mismatch"
     # Equality must include type: True and 1 must not count as the same value.
     if type(field.entered) is type(field.read_back) and field.entered == field.read_back:
         return "match"
@@ -112,6 +121,7 @@ def append_field_captures(ledger_path: str, payload: dict) -> dict:
                     "action": field.action,
                     "source": field.source,
                     "read_back": {"label": field.label, "value": field.read_back},
+                    "expected": {"label": field.label, "value": field.expected},
                     "verification": verification,
                     "historical_observation_not_verified_fact": True,
                 },

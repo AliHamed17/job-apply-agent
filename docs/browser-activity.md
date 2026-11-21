@@ -69,11 +69,14 @@ observation; a positive, job-matching result remains necessary for submission.
 
 `scripts.log_application_fields` accepts a private JSON batch with one object
 per observed field, records before/entered/read-back values in the local ledger,
-and reports `match`, `mismatch`, `unverified`, or `observed` without printing
+and reports `match`, `mismatch`, or `unverified` without printing
 the values. Include a stable event ID and timezone-aware timestamp to make
-retries idempotent. `requires_attention` means at least one value was mismatched
-or unreadable and the executor should not submit that application. Observed
-prefill is historical evidence, not a verified fact. The helper does not drive a
+retries idempotent. `requires_attention` means a value was mismatched, unreadable, lacks the
+expected source comparison, or a required field was left blank; the executor
+should not submit that application. Observed
+prefill is historical evidence, not a verified fact. An `observed_existing`
+field is unverified unless the caller supplies a sourced `expected` value; the
+helper compares that value to the displayed read-back. The helper does not drive a
 browser or automatically intercept every adapter.
 
 ```json
