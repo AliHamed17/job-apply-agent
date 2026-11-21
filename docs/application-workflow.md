@@ -1,6 +1,6 @@
 # Reusable application workflow
 
-For timestamped observations manually reviewed from a screen recording, see
+For timestamped observations reviewed from a screen recording, see
 [recording-observations.md](recording-observations.md). Importing observations
 does not submit an application or establish a verified answer.
 

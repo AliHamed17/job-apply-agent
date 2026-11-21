@@ -9,6 +9,10 @@ create a verified applicant fact, or change a job's application status. A
 inspect and reconcile an actual job-specific receipt through the existing ledger
 workflow before recording a submitted outcome.
 
+The review can be produced by a person or an authorized automated vision system.
+The importer checks the file hash and input structure; it does not independently
+verify whether the observations accurately describe the video.
+
 The planner, CV selection, claim, blocker recovery, skip reconsideration, work
 packet and pre-submit checks treat reviewed `submit_clicked`, `receipt_visible`
 and `prior_applied` events as an unresolved prior attempt. They do not reapply
