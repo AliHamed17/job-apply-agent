@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from batch_apply.catalog import choose_cv_file, cv_catalog, recommend_cv, verify_cv
-from batch_apply.ledger import BatchLedger, cv_selection_allowed
+from batch_apply.ledger import BatchLedger, RecordingReconciliationError, cv_selection_allowed
 from batch_apply.models import BatchStatus, ObservedEvidence, TabSnapshot
 from batch_apply.urls import canonical_job_url
 
@@ -172,18 +172,31 @@ def main(argv: list[str] | None = None) -> int:
                     "Every explicit selection must belong to the supplied tab inventory"
                 )
             imported = ledger.import_tabs(tabs)
+            recording_holds = []
             for tab in tabs:
                 canonical = canonical_job_url(tab.url)
                 job = ledger.get(canonical)
+                if job.status not in {
+                    BatchStatus.SUBMITTED,
+                    BatchStatus.ALREADY_APPLIED,
+                    BatchStatus.CLOSED,
+                    BatchStatus.SKIPPED,
+                } and ledger.recording_reconciliation_required(canonical):
+                    recording_holds.append({"url": canonical, "job_id": job.job_id})
+                    continue
                 if not cv_selection_allowed(job):
                     continue
-                if canonical in explicit:
-                    ledger.select_cv(canonical, explicit[canonical])
-                elif job.status == BatchStatus.DISCOVERED:
-                    choice, reason = recommend_cv(tab, args.cv_dir)
-                    ledger.prepare(canonical, choice, reason)
+                try:
+                    if canonical in explicit:
+                        ledger.select_cv(canonical, explicit[canonical])
+                    elif job.status == BatchStatus.DISCOVERED:
+                        choice, reason = recommend_cv(tab, args.cv_dir)
+                        ledger.prepare(canonical, choice, reason)
+                except RecordingReconciliationError:
+                    recording_holds.append({"url": canonical, "job_id": job.job_id})
             payload = ledger.export()
             payload["import"] = imported
+            payload["recording_reconciliation_holds"] = recording_holds
         elif args.command in {"check-employer", "pre-submit-check"}:
             checker = (
                 ledger.pre_submit_check

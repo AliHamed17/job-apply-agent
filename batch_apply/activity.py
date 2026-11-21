@@ -19,6 +19,89 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from batch_apply.models import utc_now
 from batch_apply.urls import canonical_job_url, job_key
 
+
+def _recording_url_identity(url: str) -> str:
+    """Recognize regional LinkedIn job aliases without changing stored job keys."""
+    parsed = urlsplit(url.strip())
+    host = (parsed.hostname or "").lower()
+    if host == "linkedin.com" or host.endswith(".linkedin.com"):
+        match = re.fullmatch(r"/jobs/view/(?:[^/?]*-)?(\d+)/?", parsed.path)
+        selected = next(
+            (value for key, value in parse_qsl(parsed.query) if key.lower() == "currentjobid"),
+            "",
+        )
+        job_id = match.group(1) if match else selected
+        if job_id.isdigit():
+            return f"linkedin-job:{job_id}"
+    return canonical_job_url(url)
+
+
+def recording_requires_reconciliation(events: list[dict], urls: list[str]) -> bool:
+    """A reviewed click, receipt or prior-applied notice prevents another attempt."""
+    identities = {_recording_url_identity(url) for url in urls}
+    for event in events:
+        details = event.get("details")
+        if (
+            event.get("event_type") == "observation"
+            and isinstance(details, dict)
+            and details.get("source_type") == "reviewed_screen_recording"
+            and details.get("step") in {"submit_clicked", "receipt_visible", "prior_applied"}
+            and _recording_url_identity(event["job_url"]) in identities
+        ):
+            return True
+    return False
+
+
+def recording_source_aliases(jobs: list[dict], urls: list[str]) -> list[str]:
+    """Expand only explicitly stored URL relationships, including legacy LinkedIn IDs."""
+    result = list(dict.fromkeys(urls))
+    identities = {_recording_url_identity(url) for url in result}
+    remaining = list(jobs)
+    while remaining:
+        unmatched = []
+        changed = False
+        for job in remaining:
+            candidates = [job["canonical_url"], *job.get("source_urls", [])]
+            candidate_identities = {_recording_url_identity(url) for url in candidates}
+            if identities.isdisjoint(candidate_identities):
+                unmatched.append(job)
+                continue
+            for url in candidates:
+                if url not in result:
+                    result.append(url)
+                    changed = True
+            identities.update(candidate_identities)
+        if not changed:
+            break
+        remaining = unmatched
+    return result
+
+
+def recording_reconciliation_pending(connection: sqlite3.Connection, urls: list[str]) -> bool:
+    """Inspect reviewed recording events including events with legacy job keys."""
+    if not connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='browser_batch_activity'"
+    ).fetchone():
+        return False
+    rows = connection.execute(
+        "SELECT payload FROM browser_batch_activity WHERE event_type='observation' "
+        "AND payload LIKE '%reviewed_screen_recording%'"
+    )
+    events = [json.loads(row[0]) for row in rows]
+    if not events:
+        return False
+    if recording_requires_reconciliation(events, urls):
+        return True
+    if not connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='browser_batch_jobs'"
+    ).fetchone():
+        return False
+    jobs = [
+        json.loads(row[0]) for row in connection.execute("SELECT payload FROM browser_batch_jobs")
+    ]
+    return recording_requires_reconciliation(events, recording_source_aliases(jobs, urls))
+
+
 _SECRET_KEYS = {
     "password",
     "passwd",

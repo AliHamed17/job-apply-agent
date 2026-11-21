@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from batch_apply.activity import reject_secrets
+from batch_apply.activity import recording_reconciliation_pending, reject_secrets
 from batch_apply.catalog import verify_cv
 from batch_apply.employer_policy import EmployerPolicyError, evaluate_employer
 from batch_apply.models import (
@@ -30,6 +30,11 @@ _FINAL = {
     BatchStatus.CLOSED,
     BatchStatus.SKIPPED,
 }
+
+
+class RecordingReconciliationError(ValueError):
+    """A reviewed recording points to an unresolved application attempt."""
+
 
 _CONFIRMATION = re.compile(
     r"application\s+(?:was\s+|has\s+been\s+)?(?:submitted|received|sent)|"
@@ -135,11 +140,33 @@ class BatchLedger:
         if not decision["allowed"]:
             raise EmployerPolicyError(decision["reason"])
         job = self.get(url_or_key)
+        with self._connect() as connection:
+            self._require_recording_reconciliation(connection, job, observed_urls)
         if job.status != BatchStatus.IN_PROGRESS:
             raise ValueError("Pre-submit check requires an in-progress job")
         if not job.selected_cv or not verify_cv(job.selected_cv):
             raise ValueError("Selected CV is missing or changed")
         return decision
+
+    @staticmethod
+    def _require_recording_reconciliation(
+        connection: sqlite3.Connection, job: BatchJob, extra_urls=()
+    ) -> None:
+        if recording_reconciliation_pending(
+            connection, [job.canonical_url, *job.source_urls, *extra_urls]
+        ):
+            raise RecordingReconciliationError(
+                "A reviewed recording attempt requires reconciliation"
+            )
+
+    def recording_reconciliation_required(self, url_or_key: str) -> bool:
+        """Read the recording hold without changing the job's outcome."""
+        key = job_key(url_or_key) if "://" in url_or_key else url_or_key
+        with self._connect() as connection:
+            job = self._load(connection, key)
+            return recording_reconciliation_pending(
+                connection, [job.canonical_url, *job.source_urls]
+            )
 
     def _exclude(self, connection: sqlite3.Connection, job: BatchJob) -> bool:
         decision = evaluate_employer(
@@ -256,6 +283,7 @@ class BatchLedger:
             # Reimporting/replanning must never requeue a submitted or uncertain job.
             if job.status not in {BatchStatus.DISCOVERED, BatchStatus.PREPARED}:
                 return job
+            self._require_recording_reconciliation(connection, job)
             if self._exclude(connection, job):
                 return job
             if choice is not None and not verify_cv(choice):
@@ -277,6 +305,7 @@ class BatchLedger:
                 BatchStatus.SUBMISSION_UNCERTAIN,
             }:
                 raise ValueError("Cannot replace a CV after work started or a terminal outcome")
+            self._require_recording_reconciliation(connection, job)
             if self._exclude(connection, job):
                 return job
             if not cv_selection_allowed(job):
@@ -299,6 +328,10 @@ class BatchLedger:
             job = None
             for row in rows:
                 candidate = self._load(connection, row["job_id"])
+                if recording_reconciliation_pending(
+                    connection, [candidate.canonical_url, *candidate.source_urls]
+                ):
+                    continue
                 if not self._exclude(connection, candidate):
                     job = candidate
                     break
@@ -325,6 +358,7 @@ class BatchLedger:
             job = self._load(connection, key)
             if job.status != BatchStatus.BLOCKED:
                 raise ValueError("Only a blocked job can be explicitly resumed")
+            self._require_recording_reconciliation(connection, job)
             decision = self.check_employer(url_or_key)
             if not decision["allowed"]:
                 raise EmployerPolicyError(decision["reason"])
@@ -363,6 +397,7 @@ class BatchLedger:
             job = self._load(connection, key)
             if job.status != BatchStatus.SKIPPED:
                 raise ValueError("Only a skipped job can be explicitly reconsidered")
+            self._require_recording_reconciliation(connection, job)
             decision = self.check_employer(url_or_key)
             if not decision["allowed"]:
                 raise EmployerPolicyError(decision["reason"])
