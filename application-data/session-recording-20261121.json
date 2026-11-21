@@ -1,0 +1,113 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "session-recording-20261121.enc.part001",
+      "bytes": 16777216,
+      "sha256": "0600af636588696be58372b5ee9151920164b90f00ba7bcdf9a186a1acddbb1f"
+    },
+    {
+      "file": "session-recording-20261121.enc.part002",
+      "bytes": 16777216,
+      "sha256": "9d60a1ce96fe8974c5e5136eb88159f82ed81272b296cec79370bb666330a87b"
+    },
+    {
+      "file": "session-recording-20261121.enc.part003",
+      "bytes": 16777216,
+      "sha256": "2b81b1a24411f118b250ccf643e359a37852dbf096f8bde9d2bd27bbb314edfe"
+    },
+    {
+      "file": "session-recording-20261121.enc.part004",
+      "bytes": 16777216,
+      "sha256": "e49920ffb55d3b0c9d4bd090c677f65bdb468f3770a3c6c9f12fcc362280161e"
+    },
+    {
+      "file": "session-recording-20261121.enc.part005",
+      "bytes": 16777216,
+      "sha256": "3f8eb41b5426410e284a05c9b5781e2ff9d2dfbe2de955d8736dd75a2ac6d799"
+    },
+    {
+      "file": "session-recording-20261121.enc.part006",
+      "bytes": 16777216,
+      "sha256": "86aca2e82d0fdcdce2747317c5df73ae90811978acd338118b88c4f917650712"
+    },
+    {
+      "file": "session-recording-20261121.enc.part007",
+      "bytes": 16777216,
+      "sha256": "d154565d732e9d6eca77aae4903efa185278833e4d03426acc669295994803a5"
+    },
+    {
+      "file": "session-recording-20261121.enc.part008",
+      "bytes": 16777216,
+      "sha256": "c02192f4571e13d4ba70acb4fd81332ee3edc0599e7b456e03b09d41542f0e2f"
+    },
+    {
+      "file": "session-recording-20261121.enc.part009",
+      "bytes": 16777216,
+      "sha256": "72d002b21a1b11843c46a8c3d2fce01dd1e2d1f3ece81883b804e55ffa5148f8"
+    },
+    {
+      "file": "session-recording-20261121.enc.part010",
+      "bytes": 16777216,
+      "sha256": "134b718f51a8d3344d8d73bf4f5bb08adfcc75dab1d9f44d55a77957fa020ea6"
+    },
+    {
+      "file": "session-recording-20261121.enc.part011",
+      "bytes": 16777216,
+      "sha256": "f433b55b324494a6003899f160e42b5154350f225e682e69fcde7a2b6d7d2339"
+    },
+    {
+      "file": "session-recording-20261121.enc.part012",
+      "bytes": 16777216,
+      "sha256": "9b0477e2333e12dad86e9046e2c21bc78e21c9d40e2d232533578db0f1943497"
+    },
+    {
+      "file": "session-recording-20261121.enc.part013",
+      "bytes": 16777216,
+      "sha256": "6595295a0c1a1b58e5529aed087bb04b8e0484e7f651b29e128b8724f070edae"
+    },
+    {
+      "file": "session-recording-20261121.enc.part014",
+      "bytes": 16777216,
+      "sha256": "9ba9ca0435db743a0d7fa57cb4be3a028dcac71633e1588863fadd204647557d"
+    },
+    {
+      "file": "session-recording-20261121.enc.part015",
+      "bytes": 16777216,
+      "sha256": "4611331c9a151ff7587a26c983f2086af9d2c7d688f10dcaba6e5aecf7d78b16"
+    },
+    {
+      "file": "session-recording-20261121.enc.part016",
+      "bytes": 16777216,
+      "sha256": "ce993242f7e80229254142a0870b9f172a61a0dde5854f2ebc6f42da77bd86b6"
+    },
+    {
+      "file": "session-recording-20261121.enc.part017",
+      "bytes": 16777216,
+      "sha256": "4ee32f49c80ca2c0add7fb846c69cee731f027578faedbfb68f4c447d7cda72c"
+    },
+    {
+      "file": "session-recording-20261121.enc.part018",
+      "bytes": 16777216,
+      "sha256": "b313b66704e59a8761df71c175a625ed2aa30ece848dcf55b1553cf490436674"
+    },
+    {
+      "file": "session-recording-20261121.enc.part019",
+      "bytes": 16777216,
+      "sha256": "3bc571976626ca2bb59aca15a49eda2541f664cc8545640cdadfe7bcda004d14"
+    },
+    {
+      "file": "session-recording-20261121.enc.part020",
+      "bytes": 16777216,
+      "sha256": "a54996dd56a877d6a5ffe63f8ee7c50faf13a99defc0954a50a76898f0ecb2af"
+    },
+    {
+      "file": "session-recording-20261121.enc.part021",
+      "bytes": 6052398,
+      "sha256": "c17ec9d8a62404c6f4c098d442468f2135d698820103dcfd56684c3833103495"
+    }
+  ],
+  "ciphertext_sha256": "1f4245cc226a1c30612a5dbdfcba71ce184123ba108d3a2684b53471f90d4d20",
+  "ciphertext_bytes": 341596718
+}

@@ -58,6 +58,9 @@ Or resolve a CV match individually:
 python -m scripts.plan_browser_batch select-cv --url 'JOB_URL' --cv-dir 'C:/path/to/CVs' --file 'Python_Software_Engineer_CV.pdf' --reason 'Observed role and CV match reviewed by the LLM'
 ```
 
+See [recorded application workflow](recorded-application-workflow.md) for
+role-matched CV, prefill, per-field read-back, and historical-evidence handling.
+
 ## LLM execution procedure
 
 1. Read the recording and current tab inventory. Seed jobs visibly already
