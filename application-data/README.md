@@ -175,3 +175,9 @@ python -m scripts.assemble_application_snapshot --base PRIVATE_BASE --delta PRIV
 as an authenticated delta over the assembled `session-recording-20261121.json`
 snapshot. Restore with the repository assembly helper above; the private
 handoff explains the capture time and how to reconcile newer live records.
+
+`session-validation18-20261121.json` is a later authenticated checkpoint over
+the assembled recording-reconciliation snapshot. Restore it with the same
+repository assembly helper and read its private handoff for the unfinished batch
+and snapshot time. Reconcile any newer live activity before using the restored
+ledger.
