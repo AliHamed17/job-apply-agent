@@ -170,3 +170,8 @@ It verifies every inventory file before creating the assembled output.
 ```powershell
 python -m scripts.assemble_application_snapshot --base PRIVATE_BASE --delta PRIVATE_DELTA --output NEW_PRIVATE_OUTPUT
 ```
+
+`session-recording-reconciled-20261121.json` adds newer shared-ledger evidence
+as an authenticated delta over the assembled `session-recording-20261121.json`
+snapshot. Restore with the repository assembly helper above; the private
+handoff explains the capture time and how to reconcile newer live records.

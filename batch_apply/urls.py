@@ -72,6 +72,16 @@ def canonical_job_url(raw: str) -> str:
             and (not domains or domains[0].lower() == "qualcomm.com")
         ):
             return f"https://careers.qualcomm.com/careers/job/{pids[0]}"
+    # The Sapiens HiBob listing and its /apply route share the same UUID.
+    # Restrict this rule to the observed employer host and well-formed job IDs.
+    if hostname == "sapiens.careers.hibob.com":
+        match = re.fullmatch(
+            r"/jobs/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:/apply)?",
+            path,
+            re.IGNORECASE,
+        )
+        if match:
+            return f"https://{hostname}/jobs/{match.group(1).lower()}"
     # These provider-specific form/success routes retain the posting identity.
     # Keep other suffixes/hosts unchanged: an arbitrary /apply is not proof that
     # its parent URL is the same job. Neither suffix implies an application state.
