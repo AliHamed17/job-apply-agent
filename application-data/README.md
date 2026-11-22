@@ -207,3 +207,7 @@ reconcile any later live ledger activity.
 `session-validation18-resume-20261121-2053.json` adds a subsequent encrypted
 ledger and evidence checkpoint. Restore it over the preceding snapshot using
 the same helper, then reconcile later live activity.
+
+`session-validation18-resume-20261122-1344.json` is an encrypted incremental
+checkpoint over the preceding snapshot. Restore it with the same helper and
+reconcile any later live ledger activity.
