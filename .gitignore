@@ -88,6 +88,10 @@ user_profile.yaml
 cvs/
 *.pdf
 cv_routing.yaml
+cv_routing.yaml.*
+!cv_routing.yaml.example
+# Application reports and CV bundles generated locally
+outputs/
 employer_catalog.yaml
 routing-evaluation-report.json
 linkedin-smoke-qualification.json
