@@ -1,0 +1,13 @@
+{
+  "schema_version": "jobapply-encrypted-parts-v1",
+  "format": "jobapply-aes256gcm-v1",
+  "parts": [
+    {
+      "file": "checkpoint-20261121t135047z-4654e844.enc.part001",
+      "bytes": 38964865,
+      "sha256": "0cd5c3ba268e8b487e0bf9111ad126f984a8841ab343065f4640cff35830c3b2"
+    }
+  ],
+  "ciphertext_sha256": "0cd5c3ba268e8b487e0bf9111ad126f984a8841ab343065f4640cff35830c3b2",
+  "ciphertext_bytes": 38964865
+}
