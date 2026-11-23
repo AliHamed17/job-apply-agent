@@ -1,5 +1,9 @@
 # Reusable application workflow
 
+For timestamped observations reviewed from a screen recording, see
+[recording-observations.md](recording-observations.md). Importing observations
+does not submit an application or establish a verified answer.
+
 The next phase builds on the existing active browser LLM and persistent SQLite
 ledger. It converts recorded application experience into local knowledge and
 turns a newly observed job/form into a work packet. The active LLM consumes the
